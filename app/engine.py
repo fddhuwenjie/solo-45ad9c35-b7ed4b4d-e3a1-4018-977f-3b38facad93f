@@ -1,0 +1,645 @@
+"""合规审查引擎。
+
+输入 SubmissionPayload，输出结构化审查结果：
+1. 按施焊/补焊时点匹配 WPS/PQR 与焊工资格；
+2. 一道焊口两个母材炉批，逐端核对材料组别与厚度；
+3. 检验批按时间序模拟抽检 -> 扩检（加倍/全检），核算覆盖率；
+4. 沿缺陷周向位置把 不合格底片 -> 挖补返修 -> 复检底片 串成链，
+   复检范围必须覆盖挖补区，返修前旧底片不得充数。
+"""
+from __future__ import annotations
+
+import math
+from collections import defaultdict
+from datetime import datetime, timezone
+
+from . import geometry as geo
+from .clauses import CLAUSES, Severity
+from .qualification import (
+    match_welder,
+    match_wps,
+    weld_diameters,
+    weld_groups,
+    weld_thicknesses,
+)
+from .schemas import (
+    NdeRecord,
+    RepairRecord,
+    SubmissionPayload,
+    WeldRecord,
+)
+
+MAX_REPAIRS = 2
+
+
+def _finding(code: str, *, weld_no=None, lot_id=None, nde_id=None,
+             repair_id=None, evidence=None) -> dict:
+    meta = CLAUSES[code]
+    return {
+        "code": code,
+        "severity": meta["severity"],
+        "category": meta["category"],
+        "reference": meta["reference"],
+        "message": meta["message"],
+        "weld_no": weld_no,
+        "lot_id": lot_id,
+        "nde_id": nde_id,
+        "repair_id": repair_id,
+        "evidence": evidence or {},
+    }
+
+
+def _ceil_ratio(ratio: float, total: int) -> int:
+    return max(1, math.ceil(ratio * total - 1e-9))
+
+
+# ================================================================ 返修/复检链
+
+
+def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
+                           repairs: list[RepairRecord], wps_index, welder_index):
+    """沿缺陷位置串接 原始不合格 -> 挖补 -> 复检，返回 (findings, links, closed)。"""
+    findings: list[dict] = []
+    links: list[dict] = []
+
+    ndes_by_iter: dict[int, list[NdeRecord]] = defaultdict(list)
+    for r in ndes:
+        ndes_by_iter[r.iteration].append(r)
+    for lst in ndes_by_iter.values():
+        lst.sort(key=lambda r: r.examined_at)
+
+    repairs_by_iter: dict[int, RepairRecord] = {}
+    for rep in repairs:
+        repairs_by_iter[rep.iteration] = rep  # 模型层已保证同焊口同次唯一
+
+    groups = weld_groups(weld)
+    thicknesses = weld_thicknesses(weld)
+    diameters = weld_diameters(weld)
+
+    last_iteration = max(
+        [0] + list(ndes_by_iter.keys()) + list(repairs_by_iter.keys())
+    )
+
+    # --- 原始（iteration 0）不合格显示必须有一次返修挖补覆盖其位置 ---
+    initial_rejects = [r for r in ndes_by_iter.get(0, []) if r.result == "reject"]
+    repair1 = repairs_by_iter.get(1)
+    for rec in initial_rejects:
+        for loc in rec.defect_locations:
+            covered = repair1 is not None and geo.intersects(
+                [repair1.excavated_band], [loc]
+            )
+            if not covered:
+                findings.append(_finding(
+                    "NDE-OPEN-DEFECT",
+                    weld_no=weld.weld_no, nde_id=rec.nde_id,
+                    evidence={"defect": geo.band_dict(loc),
+                              "nde_id": rec.nde_id,
+                              "reason": "缺陷位置无返修挖补记录"},
+                ))
+
+    # 有复检底片却没有对应返修记录：序列断裂
+    for it in range(1, last_iteration + 1):
+        if ndes_by_iter.get(it) and it not in repairs_by_iter:
+            findings.append(_finding(
+                "RP-SEQ-GAP",
+                weld_no=weld.weld_no,
+                evidence={"iteration": it,
+                          "reason": f"存在第 {it} 轮复检底片但无第 {it} 次返修记录"},
+            ))
+
+    # --- 逐次返修 ---
+    prev_reject_method: str | None = None
+    if initial_rejects:
+        prev_reject_method = initial_rejects[0].method
+
+    for it in range(1, last_iteration + 1):
+        rep = repairs_by_iter.get(it)
+        if rep is None:
+            if it <= MAX_REPAIRS and any(r.iteration >= it for r in repairs):
+                findings.append(_finding(
+                    "RP-SEQ-GAP", weld_no=weld.weld_no,
+                    evidence={"iteration": it, "reason": f"缺少第 {it} 次返修记录"},
+                ))
+            continue
+
+        # 次序与次数
+        if it > 1 and (it - 1) not in repairs_by_iter:
+            findings.append(_finding(
+                "RP-SEQ-GAP", weld_no=weld.weld_no, repair_id=rep.repair_id,
+                evidence={"iteration": it},
+            ))
+        if it > MAX_REPAIRS:
+            findings.append(_finding(
+                "RP-LIMIT-EXCEEDED", weld_no=weld.weld_no, repair_id=rep.repair_id,
+                evidence={"iteration": it, "limit": MAX_REPAIRS},
+            ))
+
+        # 批准
+        if not rep.approved or not rep.approved_by:
+            findings.append(_finding(
+                "RP-NO-APPROVAL", weld_no=weld.weld_no, repair_id=rep.repair_id,
+                evidence={"approved": rep.approved, "approved_by": rep.approved_by},
+            ))
+
+        # 补焊时点资格（WPS、焊工各自判定）
+        wps = wps_index.get(rep.wps_no)
+        for code in match_wps(
+            wps, at=rep.repaired_at, groups=groups,
+            thicknesses=thicknesses, process=weld.weld_process,
+        ):
+            findings.append(_finding(
+                code, weld_no=weld.weld_no, repair_id=rep.repair_id,
+                evidence={"at": rep.repaired_at.isoformat(), "wps_no": rep.wps_no,
+                          "scope": "repair_wps", "iteration": it},
+            ))
+        if wps is None:
+            # 未登记 WPS 用 RP-NO-WPS 再显式挂一条返修条款
+            findings.append(_finding(
+                "RP-NO-WPS", weld_no=weld.weld_no, repair_id=rep.repair_id,
+                evidence={"wps_no": rep.wps_no},
+            ))
+
+        welder = welder_index.get(rep.welder_id)
+        welder_codes = match_welder(
+            welder, at=rep.repaired_at, groups=groups, thicknesses=thicknesses,
+            diameters=diameters, process=weld.weld_process,
+            position=weld.weld_position,
+        )
+        for code in welder_codes:
+            findings.append(_finding(
+                code, weld_no=weld.weld_no, repair_id=rep.repair_id,
+                evidence={"at": rep.repaired_at.isoformat(),
+                          "welder_id": rep.welder_id,
+                          "scope": "repair_welder", "iteration": it},
+            ))
+        if welder is None:
+            findings.append(_finding(
+                "RP-NO-WELDER", weld_no=weld.weld_no, repair_id=rep.repair_id,
+                evidence={"welder_id": rep.welder_id},
+            ))
+
+        # --- 复检：必须发生在补焊之后、同方法、覆盖挖补区、结论闭合 ---
+        candidates = [
+            r for r in ndes_by_iter.get(it, [])
+            if r.examined_at > rep.repaired_at
+        ]
+        method_matched = [r for r in candidates
+                          if prev_reject_method is None or r.method == prev_reject_method]
+        method_other = [r for r in candidates if r not in method_matched]
+
+        reinspection_dicts: list[dict] = []
+        closed = False
+
+        if not method_matched:
+            reason = "返修后无同方法复检记录"
+            if method_other:
+                reason = "复检方法与发现缺陷的方法不一致，不能替代"
+            findings.append(_finding(
+                "RP-NO-REINSPECTION", weld_no=weld.weld_no, repair_id=rep.repair_id,
+                evidence={"iteration": it, "expected_method": prev_reject_method,
+                          "reason": reason,
+                          "other_method_nde": [r.nde_id for r in method_other]},
+            ))
+        else:
+            cover_bands: list = []
+            reject_records: list[NdeRecord] = []
+            old_films: list[dict] = []
+            # 返修前拍过的底片即使覆盖挖补区也不得作为复检依据
+            for old in ndes_by_iter.get(it - 1, []):
+                if old.iteration == 0 and any(
+                    geo.intersects([rep.excavated_band], [c]) for c in old.coverage
+                ):
+                    old_films.append({"nde_id": old.nde_id,
+                                      "examined_at": old.examined_at.isoformat(),
+                                      "iteration": old.iteration})
+            for rec in method_matched:
+                cover_bands.extend(rec.coverage)
+                reinspection_dicts.append({
+                    "nde_id": rec.nde_id,
+                    "method": rec.method,
+                    "result": rec.result,
+                    "examined_at": rec.examined_at.isoformat(),
+                    "coverage": [geo.band_dict(b) for b in rec.coverage],
+                    "report_no": rec.report_no,
+                })
+                if rec.result == "reject":
+                    reject_records.append(rec)
+
+            # 覆盖挖补区
+            if not geo.covers(cover_bands, [rep.excavated_band]):
+                findings.append(_finding(
+                    "RP-EXCAVATION-UNCOVERED",
+                    weld_no=weld.weld_no, repair_id=rep.repair_id,
+                    evidence={
+                        "iteration": it,
+                        "excavated_band": geo.band_dict(rep.excavated_band),
+                        "reinspection_coverage": [
+                            geo.band_dict(b) for b in cover_bands
+                        ],
+                        "old_films_excluded": old_films,
+                        "reason": "复检覆盖范围未包含挖补区；旧底片不得复用",
+                    },
+                ))
+
+            # 本轮仍有不合格显示：须由下一次返修沿位置闭合
+            next_rep = repairs_by_iter.get(it + 1)
+            for rec in reject_records:
+                for loc in rec.defect_locations:
+                    if next_rep is None or not geo.intersects(
+                        [next_rep.excavated_band], [loc]
+                    ):
+                        findings.append(_finding(
+                            "RP-REINSPECTION-REJECT",
+                            weld_no=weld.weld_no, nde_id=rec.nde_id,
+                            repair_id=rep.repair_id,
+                            evidence={"iteration": it,
+                                      "defect": geo.band_dict(loc),
+                                      "reason": "复检仍不合格且无后续返修闭合"},
+                        ))
+                prev_reject_method = rec.method
+
+            # 本轮合格且覆盖挖补区 => 该次返修闭合
+            if (not reject_records
+                    and geo.covers(cover_bands, [rep.excavated_band])):
+                closed = True
+
+        links.append({
+            "iteration": it,
+            "repair_id": rep.repair_id,
+            "repaired_at": rep.repaired_at,
+            "wps_no": rep.wps_no,
+            "welder_id": rep.welder_id,
+            "approved": rep.approved and bool(rep.approved_by),
+            "excavated_band": geo.band_dict(rep.excavated_band),
+            "reinspections": reinspection_dicts,
+            "closed": closed,
+        })
+
+    # 整口闭合：存在初始不合格时，每一次返修都必须 closed；
+    # 初始即全部合格则无返修链，视为闭合。
+    chain_closed = True
+    if initial_rejects:
+        chain_closed = bool(links) and all(link["closed"] for link in links)
+    return findings, links, chain_closed
+
+
+# ================================================================ 检验批
+
+
+def _evaluate_lots(payload: SubmissionPayload, weld_index, hold_welds):
+    """按时间序模拟抽检与扩检。返回 (lot_findings_per_weld, lot_summaries)。"""
+    rules = {rule.lot_id: rule for rule in payload.lot_rules}
+
+    # 焊口按所属检验批分组；焊口带了 lot_id 但未登记规则也要建组（LT-RULE-MISSING）
+    welds_by_lot: dict[str, list[WeldRecord]] = defaultdict(list)
+    for w in payload.welds:
+        if w.lot_id:
+            welds_by_lot[w.lot_id].append(w)
+
+    # 检测单归属检验批（nde.lot_id 缺省随焊口）
+    ndes_by_lot: dict[str, list[NdeRecord]] = defaultdict(list)
+    orphan_findings: list[dict] = []
+    method_warnings: list[dict] = []
+    for rec in payload.nde:
+        lot_id = rec.lot_id or (weld_index.get(rec.weld_no).lot_id
+                                if weld_index.get(rec.weld_no) else None)
+        if lot_id is None:
+            continue
+        if lot_id not in rules and lot_id not in welds_by_lot:
+            orphan_findings.append(_finding(
+                "NDE-UNKNOWN-LOT",
+                weld_no=rec.weld_no, lot_id=lot_id, nde_id=rec.nde_id,
+            ))
+            continue
+        ndes_by_lot[lot_id].append(rec)
+        rule = rules.get(lot_id)
+        if rule and rec.method != rule.required_method:
+            method_warnings.append(_finding(
+                "NDE-METHOD-LOT-MISMATCH",
+                weld_no=rec.weld_no, lot_id=lot_id, nde_id=rec.nde_id,
+                evidence={"required": rule.required_method, "actual": rec.method},
+            ))
+
+    lot_findings: dict[str, list[dict]] = defaultdict(list)
+    summaries: list[dict] = []
+
+    for lot_id, lot_welds in sorted(welds_by_lot.items()):
+        rule = rules.get(lot_id)
+        weld_nos = {w.weld_no for w in lot_welds}
+        n_total = len(lot_welds)
+        findings: list[dict] = []
+
+        if rule is None:
+            findings.append(_finding(
+                "LT-RULE-MISSING", lot_id=lot_id,
+                evidence={"weld_count": n_total},
+            ))
+            summaries.append(_lot_summary(
+                lot_id, None, 0.0, n_total, 0, 0, False, None, 0, 0, 0.0,
+                "hold", findings))
+            lot_findings[lot_id] = findings
+            continue
+
+        # 只有原始检测（iteration 0）计入抽检/扩检数量；返修复检不算新抽检口
+        orig = [r for r in ndes_by_lot.get(lot_id, []) if r.iteration == 0
+                and r.weld_no in weld_nos]
+        orig.sort(key=lambda r: (r.examined_at, r.nde_id))
+
+        first_seen: dict[str, datetime] = {}
+        reject_events: list[NdeRecord] = []
+        for rec in orig:
+            first_seen.setdefault(rec.weld_no, rec.examined_at)
+            if rec.result == "reject":
+                reject_events.append(rec)
+
+        n0 = max(rule.min_samples, _ceil_ratio(rule.sample_ratio, n_total))
+        examined_final = len(first_seen)
+        rejects = bool(reject_events)
+        extended = rejects
+        required_final = n0
+        extension_mode = None
+
+        if rejects:
+            first_reject_at = min(r.examined_at for r in reject_events)
+            extension_mode = rule.on_reject
+            # 首批 = 首拒时点（含）前完成首检的口；首拒当口计入初始抽检
+            initial_welds = {wno for wno, t in first_seen.items()
+                             if t <= first_reject_at}
+            # 扩检序列 = 首拒之后新增首检的口
+            ext_ordered = [wno for wno, t in sorted(first_seen.items(),
+                           key=lambda kv: (kv[1], kv[0]))
+                           if t > first_reject_at]
+            # 扩检序列中的不合格片（用于判定扩检批是否再次失败）
+            ext_reject_welds = {r.weld_no for r in orig
+                                if r.result == "reject"
+                                and r.examined_at > first_reject_at}
+
+            if rule.on_reject == "full":
+                required_final = n_total
+            else:
+                # double：抽检比例翻倍（按批总量计）；扩检批再失败 => 全检
+                double_required = max(
+                    rule.min_samples,
+                    _ceil_ratio(rule.sample_ratio * 2.0, n_total),
+                )
+                # 扩检批容量 = 翻倍总量 - 首批已检
+                ext_capacity = max(0, double_required - len(initial_welds))
+                batch1 = set(ext_ordered[:ext_capacity])
+                if batch1 & ext_reject_welds:
+                    required_final = n_total
+                else:
+                    required_final = double_required
+
+        # 结论判定
+        if not rejects and examined_final < n0:
+            findings.append(_finding(
+                "LT-SAMPLE-INSUFFICIENT", lot_id=lot_id,
+                evidence={"required_initial": n0,
+                          "examined": examined_final,
+                          "ratio_required": rule.sample_ratio,
+                          "ratio_actual": round(examined_final / n_total, 4)},
+            ))
+        elif rejects and examined_final < required_final:
+            findings.append(_finding(
+                "LT-EXTENSION-INSUFFICIENT", lot_id=lot_id,
+                evidence={"mode": extension_mode,
+                          "required_final": required_final,
+                          "examined_final": examined_final,
+                          "first_reject_at": min(
+                              r.examined_at for r in reject_events
+                          ).isoformat()},
+            ))
+
+        # 扩检中仍有未闭合的不合格口 => 整批 hold
+        open_reject_welds = sorted({
+            r.weld_no for r in reject_events if r.weld_no in hold_welds
+        })
+        if open_reject_welds:
+            findings.append(_finding(
+                "LT-OPEN-REJECT", lot_id=lot_id,
+                evidence={"open_reject_welds": open_reject_welds},
+            ))
+
+        decision = "hold" if any(
+            f["severity"] == Severity.HOLD.value for f in findings
+        ) else "release"
+
+        summaries.append(_lot_summary(
+            lot_id, rule.required_method, rule.sample_ratio, n_total,
+            n0,
+            len([w for w, t in first_seen.items()
+                 if not rejects or t <= min(
+                     r.examined_at for r in reject_events)]),
+            extended, extension_mode, required_final, examined_final,
+            round(examined_final / n_total, 4), decision, findings,
+        ))
+        lot_findings[lot_id] = findings
+
+    # 批次挂口：批次 hold 时，批内所有焊口连带 hold
+    per_weld: dict[str, list[dict]] = defaultdict(list)
+    for lot_id, findings in lot_findings.items():
+        holds = [f for f in findings if f["severity"] == Severity.HOLD.value]
+        for f in holds:
+            for w in welds_by_lot[lot_id]:
+                per_weld[w.weld_no].append({**f, "weld_no": w.weld_no})
+
+    # 警告/孤儿记录直接挂到对应焊口
+    for f in orphan_findings + method_warnings:
+        per_weld[f["weld_no"]].append(f)
+
+    return per_weld, summaries
+
+
+def _lot_summary(lot_id, method, ratio, total, req_init, exam_init,
+                 extended, mode, req_final, exam_final, final_ratio,
+                 decision, findings) -> dict:
+    return {
+        "lot_id": lot_id,
+        "required_method": method,
+        "required_ratio": ratio,
+        "total_welds": total,
+        "required_initial": req_init,
+        "examined_initial": exam_init,
+        "extended": extended,
+        "extension_mode": mode,
+        "required_final": req_final,
+        "examined_final": exam_final,
+        "final_ratio": final_ratio,
+        "decision": decision,
+        "findings": findings,
+    }
+
+
+# ================================================================ 单焊口
+
+
+def _evaluate_weld(weld: WeldRecord, payload: SubmissionPayload,
+                   wps_index, welder_index):
+    findings: list[dict] = []
+
+    # 炉批：两个母材端都必须有炉批号；异径提示
+    if not weld.end_a.heat_no or not weld.end_b.heat_no:
+        findings.append(_finding("HT-HEAT-MISSING", weld_no=weld.weld_no))
+    if weld.end_a.nominal_diameter_mm != weld.end_b.nominal_diameter_mm:
+        findings.append(_finding(
+            "HT-HEAT-DIAMETER-MISMATCH", weld_no=weld.weld_no,
+            evidence={"diameter_a": weld.end_a.nominal_diameter_mm,
+                      "diameter_b": weld.end_b.nominal_diameter_mm},
+        ))
+
+    # 施焊时点资格
+    groups = weld_groups(weld)
+    thicknesses = weld_thicknesses(weld)
+    diameters = weld_diameters(weld)
+    wps = wps_index.get(weld.wps_no)
+    for code in match_wps(
+        wps, at=weld.welded_at, groups=groups,
+        thicknesses=thicknesses, process=weld.weld_process,
+    ):
+        findings.append(_finding(
+            code, weld_no=weld.weld_no,
+            evidence={"at": weld.welded_at.isoformat(), "wps_no": weld.wps_no,
+                      "scope": "production_wps"},
+        ))
+    welder = welder_index.get(weld.welder_id)
+    for code in match_welder(
+        welder, at=weld.welded_at, groups=groups, thicknesses=thicknesses,
+        diameters=diameters, process=weld.weld_process,
+        position=weld.weld_position,
+    ):
+        findings.append(_finding(
+            code, weld_no=weld.weld_no,
+            evidence={"at": weld.welded_at.isoformat(),
+                      "welder_id": weld.welder_id, "scope": "production_welder"},
+        ))
+
+    ndes = [r for r in payload.nde if r.weld_no == weld.weld_no]
+    repairs = [r for r in payload.repairs if r.weld_no == weld.weld_no]
+
+    # 注意：NDE-NONE 由 evaluate() 在检验批核算后按批规则补发，
+    # 抽样批中未抽中的焊口不应被判为"无检测"。
+
+    chain_findings, links, _chain_closed = _evaluate_repair_chain(
+        weld, ndes, repairs, wps_index, welder_index
+    )
+    findings.extend(chain_findings)
+
+    return findings, links, ndes
+
+
+# ================================================================ 引擎入口
+
+
+def evaluate(payload: SubmissionPayload) -> dict:
+    wps_index = {w.wps_no: w for w in payload.wps}
+    welder_index = {w.welder_id: w for w in payload.welders}
+    weld_index = {w.weld_no: w for w in payload.welds}
+
+    weld_results: dict[str, dict] = {}
+    for weld in payload.welds:
+        findings, links, ndes = _evaluate_weld(
+            weld, payload, wps_index, welder_index
+        )
+        hold = any(f["severity"] == Severity.HOLD.value for f in findings)
+        weld_results[weld.weld_no] = {
+            "findings": findings,
+            "links": links,
+            "ndes": ndes,
+            "hold": hold,
+        }
+
+    # 先按批规则补发 NDE-NONE：抽样批未抽中的焊口不要求逐口检测
+    rules = {rule.lot_id: rule for rule in payload.lot_rules}
+    for weld in payload.welds:
+        r = weld_results[weld.weld_no]
+        if r["ndes"]:
+            continue
+        if weld.lot_id is not None:
+            rule = rules.get(weld.lot_id)
+            if rule is not None and rule.sample_ratio < 1.0:
+                continue  # 抽样批：未抽中属正常状态
+        r["findings"].append(_finding("NDE-NONE", weld_no=weld.weld_no))
+        r["hold"] = True
+
+    # 再核算检验批覆盖率与扩检（open reject 判定依赖最新 hold 集）
+    hold_welds = {no for no, r in weld_results.items() if r["hold"]}
+    lot_per_weld, lot_summaries = _evaluate_lots(
+        payload, weld_index, hold_welds
+    )
+
+    # 批次 hold 会连带焊口 hold，汇总最终焊口结论
+    weld_verdicts: list[dict] = []
+    all_findings: list[dict] = []
+    for weld in payload.welds:
+        base = weld_results[weld.weld_no]
+        findings = base["findings"] + lot_per_weld.get(weld.weld_no, [])
+        findings.sort(key=lambda f: (f["code"], f.get("nde_id") or "",
+                                     f.get("repair_id") or ""))
+        hold = any(f["severity"] == Severity.HOLD.value for f in findings)
+        all_findings.extend(findings)
+        weld_verdicts.append({
+            "weld_no": weld.weld_no,
+            "line_no": weld.line_no,
+            "lot_id": weld.lot_id,
+            "welded_at": weld.welded_at,
+            "material_groups": [weld.end_a.material_group,
+                                weld.end_b.material_group],
+            "heat_nos": [weld.end_a.heat_no, weld.end_b.heat_no],
+            "heats": [
+                {"side": "a", **weld.end_a.model_dump()},
+                {"side": "b", **weld.end_b.model_dump()},
+            ],
+            "thickness_mm": weld_thicknesses(weld),
+            "nde_count": len(base["ndes"]),
+            "nde": [{
+                "nde_id": r.nde_id,
+                "method": r.method,
+                "result": r.result,
+                "iteration": r.iteration,
+                "examined_at": r.examined_at,
+                "examiner": r.examiner,
+                "lot_id": r.lot_id,
+                "report_no": r.report_no,
+                "coverage": [geo.band_dict(b) for b in r.coverage],
+                "defect_locations": [geo.band_dict(b) for b in r.defect_locations],
+            } for r in sorted(base["ndes"],
+                              key=lambda r: (r.iteration, r.examined_at))],
+            "repairs": base["links"],
+            "decision": "hold" if hold else "release",
+            "findings": findings,
+        })
+
+    all_findings.sort(key=lambda f: (
+        f.get("weld_no") or "~", f.get("lot_id") or "~",
+        f["code"], f.get("nde_id") or "", f.get("repair_id") or "",
+    ))
+
+    total = len(payload.welds)
+    held = sum(1 for v in weld_verdicts if v["decision"] == "hold")
+    codes = sorted({f["code"] for f in all_findings})
+    return {
+        "decision": "hold" if held else "release",
+        "stats": {
+            "weld_total": total,
+            "weld_release": total - held,
+            "weld_hold": held,
+            "lot_total": len(lot_summaries),
+            "lot_hold": sum(1 for s in lot_summaries
+                            if s["decision"] == "hold"),
+            "findings_total": len(all_findings),
+            "findings_hold": sum(
+                1 for f in all_findings
+                if f["severity"] == Severity.HOLD.value
+            ),
+            "findings_warning": sum(
+                1 for f in all_findings
+                if f["severity"] == Severity.WARNING.value
+            ),
+            "repairs_total": len(payload.repairs),
+        },
+        "lot_summaries": lot_summaries,
+        "welds": weld_verdicts,
+        "findings": all_findings,
+        "clauses_triggered": codes,
+        "evaluated_at": datetime.now(timezone.utc),
+    }
