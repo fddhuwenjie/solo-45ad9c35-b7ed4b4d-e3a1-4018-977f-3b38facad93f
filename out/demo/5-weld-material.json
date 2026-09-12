@@ -6,18 +6,18 @@
     "weld_hold": 10,
     "lot_total": 1,
     "lot_hold": 1,
-    "findings_total": 14,
-    "findings_hold": 14,
+    "findings_total": 21,
+    "findings_hold": 21,
     "findings_warning": 0,
-    "repairs_total": 0,
-    "nde_reports_total": 2,
-    "nde_reports_excluded": 2,
-    "nde_personnel_total": 3,
+    "repairs_total": 1,
+    "nde_reports_total": 5,
+    "nde_reports_excluded": 0,
+    "nde_personnel_total": 2,
     "nde_equipment_versions_total": 2,
     "consumable_chain_enabled": true,
     "consumable_batches_total": 1,
-    "consumable_uses_total": 10,
-    "consumable_uses_invalid": 0
+    "consumable_uses_total": 11,
+    "consumable_uses_invalid": 4
   },
   "nde_resources": {
     "personnel": [
@@ -34,7 +34,7 @@
           "digital"
         ],
         "valid_from": "2026-01-01T00:00:00+00:00",
-        "valid_to": "2026-03-06T00:00:00+00:00"
+        "valid_to": "2026-12-31T23:59:59+00:00"
       },
       {
         "cert_no": "NRT-II-LI",
@@ -50,21 +50,6 @@
         ],
         "valid_from": "2026-01-01T00:00:00+00:00",
         "valid_to": "2026-12-31T23:59:59+00:00"
-      },
-      {
-        "cert_no": "NRT-II-ZHANG-R2",
-        "name": "NDE-II-张",
-        "method": "RT",
-        "level": "II",
-        "products": [
-          "pressure_pipe"
-        ],
-        "techniques": [
-          "film",
-          "digital"
-        ],
-        "valid_from": "2026-03-06T00:00:00+00:00",
-        "valid_to": "2030-03-05T23:59:59+00:00"
       }
     ],
     "equipment": [
@@ -115,36 +100,7 @@
         "uses": []
       }
     ],
-    "invalid_reports": [
-      {
-        "nde_id": "N-001",
-        "report_no": "RT-2026-N-001",
-        "weld_no": "W-001",
-        "method": "RT",
-        "iteration": 0,
-        "period": {
-          "started_at": "2026-03-05T22:00:00+00:00",
-          "finished_at": "2026-03-06T02:00:00+00:00"
-        },
-        "reasons": [
-          "NR-CERT-EXPIRED"
-        ]
-      },
-      {
-        "nde_id": "N-002",
-        "report_no": "RT-2026-N-002",
-        "weld_no": "W-006",
-        "method": "RT",
-        "iteration": 0,
-        "period": {
-          "started_at": "2026-03-08T12:00:00+00:00",
-          "finished_at": "2026-03-08T14:00:00+00:00"
-        },
-        "reasons": [
-          "NR-EQUIP-MISSING"
-        ]
-      }
-    ]
+    "invalid_reports": []
   },
   "lot_summaries": [
     {
@@ -153,34 +109,21 @@
       "required_ratio": 0.2,
       "total_welds": 10,
       "required_initial": 2,
-      "examined_initial": 0,
-      "extended": false,
-      "extension_mode": null,
-      "required_final": 2,
-      "examined_final": 0,
-      "final_ratio": 0.0,
-      "excluded_reports": [
-        {
-          "nde_id": "N-001",
-          "report_no": "RT-2026-N-001",
-          "weld_no": "W-001",
-          "iteration": 0
-        },
-        {
-          "nde_id": "N-002",
-          "report_no": "RT-2026-N-002",
-          "weld_no": "W-006",
-          "iteration": 0
-        }
-      ],
+      "examined_initial": 1,
+      "extended": true,
+      "extension_mode": "double",
+      "required_final": 4,
+      "examined_final": 4,
+      "final_ratio": 0.4,
+      "excluded_reports": [],
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": null,
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -192,10 +135,9 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
+            "open_reject_welds": [
+              "W-001"
+            ]
           }
         }
       ]
@@ -236,30 +178,30 @@
         8.18,
         8.18
       ],
-      "nde_count": 1,
-      "nde_valid_count": 0,
-      "nde_excluded_count": 1,
+      "nde_count": 2,
+      "nde_valid_count": 2,
+      "nde_excluded_count": 0,
       "nde": [
         {
           "nde_id": "N-001",
           "method": "RT",
-          "result": "accept",
+          "result": "reject",
           "iteration": 0,
-          "examined_at": "2026-03-06 02:00:00+00:00",
-          "started_at": "2026-03-05 22:00:00+00:00",
-          "finished_at": "2026-03-06 02:00:00+00:00",
+          "examined_at": "2026-03-02 14:00:00+00:00",
+          "started_at": "2026-03-02 12:00:00+00:00",
+          "finished_at": "2026-03-02 14:00:00+00:00",
           "examiner": "NDE-II-张",
           "lot_id": null,
           "report_no": "RT-2026-N-001",
           "technique": "film",
           "applied_thickness_mm": null,
           "exposure_energy_kev": 160.0,
-          "resource_valid": false,
+          "resource_valid": true,
           "resource": {
-            "resource_valid": false,
+            "resource_valid": true,
             "period": {
-              "started_at": "2026-03-05T22:00:00+00:00",
-              "finished_at": "2026-03-06T02:00:00+00:00"
+              "started_at": "2026-03-02T12:00:00+00:00",
+              "finished_at": "2026-03-02T14:00:00+00:00"
             },
             "examiner": {
               "cert_no": "NRT-II-ZHANG",
@@ -276,7 +218,7 @@
                   "digital"
                 ],
                 "valid_from": "2026-01-01T00:00:00+00:00",
-                "valid_to": "2026-03-06T00:00:00+00:00"
+                "valid_to": "2026-12-31T23:59:59+00:00"
               }
             },
             "reviewer": {
@@ -347,18 +289,7 @@
                 "uses": []
               }
             ],
-            "failures": [
-              {
-                "code": "NR-CERT-EXPIRED",
-                "role": "examiner",
-                "target": "NRT-II-ZHANG",
-                "reason": "证书有效期 2026-01-01T00:00:00+00:00 ~ 2026-03-06T00:00:00+00:00 未持续覆盖实施时段 2026-03-05T22:00:00+00:00 ~ 2026-03-06T02:00:00+00:00",
-                "valid_from": "2026-01-01T00:00:00+00:00",
-                "valid_to": "2026-03-06T00:00:00+00:00",
-                "period_start": "2026-03-05T22:00:00+00:00",
-                "period_end": "2026-03-06T02:00:00+00:00"
-              }
-            ]
+            "failures": []
           },
           "coverage": [
             {
@@ -367,10 +298,246 @@
               "end_deg": 360.0
             }
           ],
+          "defect_locations": [
+            {
+              "full_circle": false,
+              "start_deg": 300.0,
+              "end_deg": 340.0
+            }
+          ]
+        },
+        {
+          "nde_id": "N-051",
+          "method": "RT",
+          "result": "accept",
+          "iteration": 1,
+          "examined_at": "2026-03-06 14:00:00+00:00",
+          "started_at": "2026-03-06 12:00:00+00:00",
+          "finished_at": "2026-03-06 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-051",
+          "technique": "film",
+          "applied_thickness_mm": null,
+          "exposure_energy_kev": 160.0,
+          "resource_valid": true,
+          "resource": {
+            "resource_valid": true,
+            "period": {
+              "started_at": "2026-03-06T12:00:00+00:00",
+              "finished_at": "2026-03-06T14:00:00+00:00"
+            },
+            "examiner": {
+              "cert_no": "NRT-II-ZHANG",
+              "cert": {
+                "cert_no": "NRT-II-ZHANG",
+                "name": "NDE-II-张",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "reviewer": {
+              "cert_no": "NRT-II-LI",
+              "cert": {
+                "cert_no": "NRT-II-LI",
+                "name": "NDE-II-李",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "equipment": [
+              {
+                "equipment_id": "XR-250",
+                "version": "2026A",
+                "role": "main",
+                "name": "250kV 便携式 X 射线机",
+                "kind": "xray_source",
+                "method": "RT",
+                "serial_no": "SN-XR-250-07",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": 20.0,
+                "energy_max_kev": 250.0,
+                "source_isotope": null,
+                "uses": [
+                  {
+                    "equipment_id": "FILM-T2",
+                    "version": "2026A",
+                    "role": "film"
+                  }
+                ]
+              },
+              {
+                "equipment_id": "FILM-T2",
+                "version": "2026A",
+                "role": "accessory",
+                "name": "工业射线胶片 T2",
+                "kind": "film",
+                "method": "RT",
+                "serial_no": "SN-FILM-T2",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": null,
+                "energy_max_kev": null,
+                "source_isotope": null,
+                "uses": []
+              }
+            ],
+            "failures": []
+          },
+          "coverage": [
+            {
+              "full_circle": false,
+              "start_deg": 280.0,
+              "end_deg": 355.0
+            }
+          ],
           "defect_locations": []
         }
       ],
-      "repairs": [],
+      "repairs": [
+        {
+          "iteration": 1,
+          "repair_id": "R-001",
+          "repaired_at": "2026-03-05 10:00:00+00:00",
+          "wps_no": "WPS-101",
+          "welder_id": "W-001",
+          "approved": true,
+          "excavated_band": {
+            "full_circle": false,
+            "start_deg": 295.0,
+            "end_deg": 345.0
+          },
+          "reinspections": [
+            {
+              "nde_id": "N-051",
+              "method": "RT",
+              "result": "accept",
+              "examined_at": "2026-03-06T14:00:00+00:00",
+              "coverage": [
+                {
+                  "full_circle": false,
+                  "start_deg": 280.0,
+                  "end_deg": 355.0
+                }
+              ],
+              "report_no": "RT-2026-N-051"
+            }
+          ],
+          "consumable_uses": [
+            {
+              "use_id": "CU-011",
+              "scope": "repair",
+              "weld_no": "W-001",
+              "repair_id": "R-001",
+              "iteration": 1,
+              "batch_id": "WM-E5015-2602",
+              "segment_id": "SG-05",
+              "qty_kg": 6.0,
+              "used_at": "2026-03-05T10:00:00+00:00",
+              "consumable_valid": false,
+              "reasons": [
+                "WM-CONTAINER-CALIBRATION",
+                "WM-QTY-CONSERVATION"
+              ],
+              "exposure_minutes": 120.0,
+              "exposure_limit_minutes": 240.0,
+              "chain": {
+                "use_id": "CU-011",
+                "qty_kg": 6.0,
+                "used_at": "2026-03-05T10:00:00+00:00",
+                "batch": {
+                  "batch_id": "WM-E5015-2602",
+                  "classification": "E5015",
+                  "designation": "J507",
+                  "manufacturer_lot_no": "LOT-J507-260201",
+                  "cert_no": "MTC-LOT-J507-260201",
+                  "cert_lot_no": "LOT-J507-260201",
+                  "received_status": "accepted",
+                  "applicable_wps": [
+                    "WPS-101"
+                  ]
+                },
+                "rule": {
+                  "classification": "E5015",
+                  "bake_temp_min_c": 350.0,
+                  "bake_temp_max_c": 400.0,
+                  "min_soak_minutes": 60.0,
+                  "holding_temp_min_c": 100.0,
+                  "holding_temp_max_c": 150.0,
+                  "max_exposure_minutes": 240.0,
+                  "max_bake_cycles": 2,
+                  "max_transfer_minutes": 15.0,
+                  "max_log_gap_minutes": 180.0
+                },
+                "bake": {
+                  "bake_id": "BK-1",
+                  "cycle_no": 1,
+                  "oven_id": "OV-1",
+                  "oven_version": "2026A",
+                  "loaded_at": "2026-03-01T04:00:00+00:00",
+                  "unloaded_at": "2026-03-01T05:00:00+00:00",
+                  "loaded_qty_kg": 50.0
+                },
+                "stay": {
+                  "stay_id": "ST-1",
+                  "quiver_id": "QV-1",
+                  "quiver_version": "2026A",
+                  "loaded_at": "2026-03-01T05:05:00+00:00",
+                  "unloaded_at": "2026-03-05T19:00:00+00:00",
+                  "loaded_qty_kg": 50.0
+                },
+                "segment": {
+                  "segment_id": "SG-05",
+                  "issued_at": "2026-03-05T08:00:00+00:00",
+                  "issued_qty_kg": 0.6,
+                  "issued_to": "焊工班组"
+                },
+                "events": [
+                  {
+                    "event_id": "EV-R05",
+                    "segment_id": "SG-05",
+                    "event_type": "return",
+                    "at": "2026-03-05T18:00:00Z",
+                    "qty_kg": 0.5
+                  }
+                ]
+              }
+            }
+          ],
+          "closed": false
+        }
+      ],
       "consumable_uses": [
         {
           "use_id": "CU-001",
@@ -428,7 +595,7 @@
               "quiver_id": "QV-1",
               "quiver_version": "2026A",
               "loaded_at": "2026-03-01T05:05:00+00:00",
-              "unloaded_at": "2026-03-03T19:00:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
               "loaded_qty_kg": 50.0
             },
             "segment": {
@@ -452,11 +619,11 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": "W-001",
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -468,81 +635,83 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
-          }
-        },
-        {
-          "code": "NR-CERT-EXPIRED",
-          "severity": "hold",
-          "category": "nde",
-          "reference": "TSG Z8001：证书应在有效期内实施检测；跨到期点的夜班时段不得整体采信",
-          "message": "人员证书未在整个检测实施时段内持续有效（时段跨过到期点或检测时证书尚未生效）",
-          "weld_no": "W-001",
-          "lot_id": null,
-          "nde_id": "N-001",
-          "repair_id": null,
-          "report_no": "RT-2026-N-001",
-          "batch_id": null,
-          "segment_id": null,
-          "bake_id": null,
-          "stay_id": null,
-          "use_id": null,
-          "evidence": {
-            "role": "examiner",
-            "target": "NRT-II-ZHANG",
-            "reason": "证书有效期 2026-01-01T00:00:00+00:00 ~ 2026-03-06T00:00:00+00:00 未持续覆盖实施时段 2026-03-05T22:00:00+00:00 ~ 2026-03-06T02:00:00+00:00",
-            "period": {
-              "started_at": "2026-03-05T22:00:00+00:00",
-              "finished_at": "2026-03-06T02:00:00+00:00"
-            },
-            "valid_from": "2026-01-01T00:00:00+00:00",
-            "valid_to": "2026-03-06T00:00:00+00:00",
-            "period_start": "2026-03-05T22:00:00+00:00",
-            "period_end": "2026-03-06T02:00:00+00:00"
-          }
-        },
-        {
-          "code": "NR-RECORD-EXCLUDED",
-          "severity": "hold",
-          "category": "nde",
-          "reference": "质量记录完整性：人员资格或设备状态在检测当时无效的报告不得计入抽检、扩检与返修复检",
-          "message": "该检测报告因 NDT 资源核验未通过，已从抽检/扩检/返修复检计数中剔除（同一张底片不能既覆盖焊缝又覆盖资源资格）",
-          "weld_no": "W-001",
-          "lot_id": null,
-          "nde_id": "N-001",
-          "repair_id": null,
-          "report_no": "RT-2026-N-001",
-          "batch_id": null,
-          "segment_id": null,
-          "bake_id": null,
-          "stay_id": null,
-          "use_id": null,
-          "evidence": {
-            "report_no": "RT-2026-N-001",
-            "period": {
-              "started_at": "2026-03-05T22:00:00+00:00",
-              "finished_at": "2026-03-06T02:00:00+00:00"
-            },
-            "reasons": [
-              "NR-CERT-EXPIRED"
-            ],
-            "examiner_cert_no": "NRT-II-ZHANG",
-            "reviewer_cert_no": "NRT-II-LI",
-            "equipment": [
-              {
-                "equipment_id": "XR-250",
-                "version": "2026A",
-                "role": "main"
-              },
-              {
-                "equipment_id": "FILM-T2",
-                "version": "2026A",
-                "role": "accessory"
-              }
+            "open_reject_welds": [
+              "W-001"
             ]
+          }
+        },
+        {
+          "code": "RP-WM-INVALID",
+          "severity": "hold",
+          "category": "repair",
+          "reference": "GB 50236 / GB/T 20801：返修补焊所用焊材必须合规；超时、断档、校准失效或已报废焊材不得用于返修闭合",
+          "message": "返修补焊消耗的焊材未通过批次/烘干/保温/领用链核验，失效焊材不得用于返修闭合（具体 WM 条款随附）",
+          "weld_no": "W-001",
+          "lot_id": null,
+          "nde_id": null,
+          "repair_id": "R-001",
+          "report_no": null,
+          "batch_id": null,
+          "segment_id": null,
+          "bake_id": null,
+          "stay_id": null,
+          "use_id": null,
+          "evidence": {
+            "iteration": 1,
+            "wm_codes": [
+              "WM-CONTAINER-CALIBRATION",
+              "WM-QTY-CONSERVATION"
+            ]
+          }
+        },
+        {
+          "code": "WM-CONTAINER-CALIBRATION",
+          "severity": "hold",
+          "category": "consumable",
+          "reference": "计量体系：烘箱、保温筒的测温/控温装置应在校准有效期内使用；跨到期点的时段不得整体采信",
+          "message": "烘箱/保温筒校准有效期未持续覆盖使用时段（含跨到期点）",
+          "weld_no": "W-001",
+          "lot_id": null,
+          "nde_id": null,
+          "repair_id": "R-001",
+          "report_no": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-05",
+          "bake_id": null,
+          "stay_id": null,
+          "use_id": "CU-011",
+          "evidence": {
+            "scope": "repair",
+            "use_id": "CU-011",
+            "batch_id": "WM-E5015-2602",
+            "segment_id": "SG-05",
+            "exposure_minutes": 120.0,
+            "exposure_limit_minutes": 240.0
+          }
+        },
+        {
+          "code": "WM-QTY-CONSERVATION",
+          "severity": "hold",
+          "category": "consumable",
+          "reference": "质量体系：焊材发放、回收、报废数量应与消耗相符（账物相符），同一数量不得重复分配",
+          "message": "数量守恒失败：领用段的消耗+退回+报废数量超出领出数量（同一数量被重复分配）",
+          "weld_no": "W-001",
+          "lot_id": null,
+          "nde_id": null,
+          "repair_id": "R-001",
+          "report_no": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-05",
+          "bake_id": null,
+          "stay_id": null,
+          "use_id": "CU-011",
+          "evidence": {
+            "scope": "repair",
+            "use_id": "CU-011",
+            "batch_id": "WM-E5015-2602",
+            "segment_id": "SG-05",
+            "exposure_minutes": 120.0,
+            "exposure_limit_minutes": 240.0
           }
         }
       ]
@@ -581,10 +750,129 @@
         8.18,
         8.18
       ],
-      "nde_count": 0,
-      "nde_valid_count": 0,
+      "nde_count": 1,
+      "nde_valid_count": 1,
       "nde_excluded_count": 0,
-      "nde": [],
+      "nde": [
+        {
+          "nde_id": "N-101",
+          "method": "RT",
+          "result": "accept",
+          "iteration": 0,
+          "examined_at": "2026-03-16 14:00:00+00:00",
+          "started_at": "2026-03-16 12:00:00+00:00",
+          "finished_at": "2026-03-16 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-101",
+          "technique": "film",
+          "applied_thickness_mm": null,
+          "exposure_energy_kev": 160.0,
+          "resource_valid": true,
+          "resource": {
+            "resource_valid": true,
+            "period": {
+              "started_at": "2026-03-16T12:00:00+00:00",
+              "finished_at": "2026-03-16T14:00:00+00:00"
+            },
+            "examiner": {
+              "cert_no": "NRT-II-ZHANG",
+              "cert": {
+                "cert_no": "NRT-II-ZHANG",
+                "name": "NDE-II-张",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "reviewer": {
+              "cert_no": "NRT-II-LI",
+              "cert": {
+                "cert_no": "NRT-II-LI",
+                "name": "NDE-II-李",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "equipment": [
+              {
+                "equipment_id": "XR-250",
+                "version": "2026A",
+                "role": "main",
+                "name": "250kV 便携式 X 射线机",
+                "kind": "xray_source",
+                "method": "RT",
+                "serial_no": "SN-XR-250-07",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": 20.0,
+                "energy_max_kev": 250.0,
+                "source_isotope": null,
+                "uses": [
+                  {
+                    "equipment_id": "FILM-T2",
+                    "version": "2026A",
+                    "role": "film"
+                  }
+                ]
+              },
+              {
+                "equipment_id": "FILM-T2",
+                "version": "2026A",
+                "role": "accessory",
+                "name": "工业射线胶片 T2",
+                "kind": "film",
+                "method": "RT",
+                "serial_no": "SN-FILM-T2",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": null,
+                "energy_max_kev": null,
+                "source_isotope": null,
+                "uses": []
+              }
+            ],
+            "failures": []
+          },
+          "coverage": [
+            {
+              "full_circle": true,
+              "start_deg": 0.0,
+              "end_deg": 360.0
+            }
+          ],
+          "defect_locations": []
+        }
+      ],
       "repairs": [],
       "consumable_uses": [
         {
@@ -643,7 +931,7 @@
               "quiver_id": "QV-1",
               "quiver_version": "2026A",
               "loaded_at": "2026-03-01T05:05:00+00:00",
-              "unloaded_at": "2026-03-03T19:00:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
               "loaded_qty_kg": 50.0
             },
             "segment": {
@@ -667,11 +955,11 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": "W-002",
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -683,10 +971,9 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
+            "open_reject_welds": [
+              "W-001"
+            ]
           }
         }
       ]
@@ -787,7 +1074,7 @@
               "quiver_id": "QV-1",
               "quiver_version": "2026A",
               "loaded_at": "2026-03-01T05:05:00+00:00",
-              "unloaded_at": "2026-03-03T19:00:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
               "loaded_qty_kg": 50.0
             },
             "segment": {
@@ -811,11 +1098,11 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": "W-003",
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -827,10 +1114,9 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
+            "open_reject_welds": [
+              "W-001"
+            ]
           }
         }
       ]
@@ -931,7 +1217,7 @@
               "quiver_id": "QV-1",
               "quiver_version": "2026A",
               "loaded_at": "2026-03-01T05:05:00+00:00",
-              "unloaded_at": "2026-03-03T19:00:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
               "loaded_qty_kg": 50.0
             },
             "segment": {
@@ -955,11 +1241,11 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": "W-004",
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -971,10 +1257,9 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
+            "open_reject_welds": [
+              "W-001"
+            ]
           }
         }
       ]
@@ -1075,7 +1360,7 @@
               "quiver_id": "QV-1",
               "quiver_version": "2026A",
               "loaded_at": "2026-03-01T05:05:00+00:00",
-              "unloaded_at": "2026-03-03T19:00:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
               "loaded_qty_kg": 50.0
             },
             "segment": {
@@ -1099,11 +1384,11 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": "W-005",
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -1115,10 +1400,9 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
+            "open_reject_welds": [
+              "W-001"
+            ]
           }
         }
       ]
@@ -1158,8 +1442,8 @@
         8.18
       ],
       "nde_count": 1,
-      "nde_valid_count": 0,
-      "nde_excluded_count": 1,
+      "nde_valid_count": 1,
+      "nde_excluded_count": 0,
       "nde": [
         {
           "nde_id": "N-002",
@@ -1175,17 +1459,17 @@
           "technique": "film",
           "applied_thickness_mm": null,
           "exposure_energy_kev": 160.0,
-          "resource_valid": false,
+          "resource_valid": true,
           "resource": {
-            "resource_valid": false,
+            "resource_valid": true,
             "period": {
               "started_at": "2026-03-08T12:00:00+00:00",
               "finished_at": "2026-03-08T14:00:00+00:00"
             },
             "examiner": {
-              "cert_no": "NRT-II-ZHANG-R2",
+              "cert_no": "NRT-II-ZHANG",
               "cert": {
-                "cert_no": "NRT-II-ZHANG-R2",
+                "cert_no": "NRT-II-ZHANG",
                 "name": "NDE-II-张",
                 "method": "RT",
                 "level": "II",
@@ -1196,8 +1480,8 @@
                   "film",
                   "digital"
                 ],
-                "valid_from": "2026-03-06T00:00:00+00:00",
-                "valid_to": "2030-03-05T23:59:59+00:00"
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
               }
             },
             "reviewer": {
@@ -1218,15 +1502,57 @@
                 "valid_to": "2026-12-31T23:59:59+00:00"
               }
             },
-            "equipment": [],
-            "failures": [
+            "equipment": [
               {
-                "code": "NR-EQUIP-MISSING",
+                "equipment_id": "XR-250",
+                "version": "2026A",
                 "role": "main",
-                "target": "XR-250@2026B",
-                "reason": "设备版本 XR-250@2026B 未登记（引用缺失）"
+                "name": "250kV 便携式 X 射线机",
+                "kind": "xray_source",
+                "method": "RT",
+                "serial_no": "SN-XR-250-07",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": 20.0,
+                "energy_max_kev": 250.0,
+                "source_isotope": null,
+                "uses": [
+                  {
+                    "equipment_id": "FILM-T2",
+                    "version": "2026A",
+                    "role": "film"
+                  }
+                ]
+              },
+              {
+                "equipment_id": "FILM-T2",
+                "version": "2026A",
+                "role": "accessory",
+                "name": "工业射线胶片 T2",
+                "kind": "film",
+                "method": "RT",
+                "serial_no": "SN-FILM-T2",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": null,
+                "energy_max_kev": null,
+                "source_isotope": null,
+                "uses": []
               }
-            ]
+            ],
+            "failures": []
           },
           "coverage": [
             {
@@ -1296,7 +1622,7 @@
               "quiver_id": "QV-1",
               "quiver_version": "2026A",
               "loaded_at": "2026-03-01T05:05:00+00:00",
-              "unloaded_at": "2026-03-03T19:00:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
               "loaded_qty_kg": 50.0
             },
             "segment": {
@@ -1320,11 +1646,11 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": "W-006",
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -1336,66 +1662,9 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
-          }
-        },
-        {
-          "code": "NR-EQUIP-MISSING",
-          "severity": "hold",
-          "category": "nde",
-          "reference": "质量记录完整性：检测报告应可追溯所用设备的具体校准版本",
-          "message": "检测记录引用的设备版本（或其关键附件版本）未登记（引用缺失）",
-          "weld_no": "W-006",
-          "lot_id": null,
-          "nde_id": "N-002",
-          "repair_id": null,
-          "report_no": "RT-2026-N-002",
-          "batch_id": null,
-          "segment_id": null,
-          "bake_id": null,
-          "stay_id": null,
-          "use_id": null,
-          "evidence": {
-            "role": "main",
-            "target": "XR-250@2026B",
-            "reason": "设备版本 XR-250@2026B 未登记（引用缺失）",
-            "period": {
-              "started_at": "2026-03-08T12:00:00+00:00",
-              "finished_at": "2026-03-08T14:00:00+00:00"
-            }
-          }
-        },
-        {
-          "code": "NR-RECORD-EXCLUDED",
-          "severity": "hold",
-          "category": "nde",
-          "reference": "质量记录完整性：人员资格或设备状态在检测当时无效的报告不得计入抽检、扩检与返修复检",
-          "message": "该检测报告因 NDT 资源核验未通过，已从抽检/扩检/返修复检计数中剔除（同一张底片不能既覆盖焊缝又覆盖资源资格）",
-          "weld_no": "W-006",
-          "lot_id": null,
-          "nde_id": "N-002",
-          "repair_id": null,
-          "report_no": "RT-2026-N-002",
-          "batch_id": null,
-          "segment_id": null,
-          "bake_id": null,
-          "stay_id": null,
-          "use_id": null,
-          "evidence": {
-            "report_no": "RT-2026-N-002",
-            "period": {
-              "started_at": "2026-03-08T12:00:00+00:00",
-              "finished_at": "2026-03-08T14:00:00+00:00"
-            },
-            "reasons": [
-              "NR-EQUIP-MISSING"
-            ],
-            "examiner_cert_no": "NRT-II-ZHANG-R2",
-            "reviewer_cert_no": "NRT-II-LI",
-            "equipment": []
+            "open_reject_welds": [
+              "W-001"
+            ]
           }
         }
       ]
@@ -1434,10 +1703,129 @@
         8.18,
         8.18
       ],
-      "nde_count": 0,
-      "nde_valid_count": 0,
+      "nde_count": 1,
+      "nde_valid_count": 1,
       "nde_excluded_count": 0,
-      "nde": [],
+      "nde": [
+        {
+          "nde_id": "N-102",
+          "method": "RT",
+          "result": "accept",
+          "iteration": 0,
+          "examined_at": "2026-03-17 14:00:00+00:00",
+          "started_at": "2026-03-17 12:00:00+00:00",
+          "finished_at": "2026-03-17 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-102",
+          "technique": "film",
+          "applied_thickness_mm": null,
+          "exposure_energy_kev": 160.0,
+          "resource_valid": true,
+          "resource": {
+            "resource_valid": true,
+            "period": {
+              "started_at": "2026-03-17T12:00:00+00:00",
+              "finished_at": "2026-03-17T14:00:00+00:00"
+            },
+            "examiner": {
+              "cert_no": "NRT-II-ZHANG",
+              "cert": {
+                "cert_no": "NRT-II-ZHANG",
+                "name": "NDE-II-张",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "reviewer": {
+              "cert_no": "NRT-II-LI",
+              "cert": {
+                "cert_no": "NRT-II-LI",
+                "name": "NDE-II-李",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "equipment": [
+              {
+                "equipment_id": "XR-250",
+                "version": "2026A",
+                "role": "main",
+                "name": "250kV 便携式 X 射线机",
+                "kind": "xray_source",
+                "method": "RT",
+                "serial_no": "SN-XR-250-07",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": 20.0,
+                "energy_max_kev": 250.0,
+                "source_isotope": null,
+                "uses": [
+                  {
+                    "equipment_id": "FILM-T2",
+                    "version": "2026A",
+                    "role": "film"
+                  }
+                ]
+              },
+              {
+                "equipment_id": "FILM-T2",
+                "version": "2026A",
+                "role": "accessory",
+                "name": "工业射线胶片 T2",
+                "kind": "film",
+                "method": "RT",
+                "serial_no": "SN-FILM-T2",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": null,
+                "energy_max_kev": null,
+                "source_isotope": null,
+                "uses": []
+              }
+            ],
+            "failures": []
+          },
+          "coverage": [
+            {
+              "full_circle": true,
+              "start_deg": 0.0,
+              "end_deg": 360.0
+            }
+          ],
+          "defect_locations": []
+        }
+      ],
       "repairs": [],
       "consumable_uses": [
         {
@@ -1496,7 +1884,7 @@
               "quiver_id": "QV-1",
               "quiver_version": "2026A",
               "loaded_at": "2026-03-01T05:05:00+00:00",
-              "unloaded_at": "2026-03-03T19:00:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
               "loaded_qty_kg": 50.0
             },
             "segment": {
@@ -1520,11 +1908,11 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": "W-007",
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -1536,10 +1924,9 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
+            "open_reject_welds": [
+              "W-001"
+            ]
           }
         }
       ]
@@ -1594,9 +1981,11 @@
           "segment_id": "SG-03",
           "qty_kg": 0.2,
           "used_at": "2026-03-03T09:00:00+00:00",
-          "consumable_valid": true,
-          "reasons": [],
-          "exposure_minutes": 60.0,
+          "consumable_valid": false,
+          "reasons": [
+            "WM-EXPOSURE-EXCEEDED"
+          ],
+          "exposure_minutes": 360.0,
           "exposure_limit_minutes": 240.0,
           "chain": {
             "use_id": "CU-008",
@@ -1640,12 +2029,12 @@
               "quiver_id": "QV-1",
               "quiver_version": "2026A",
               "loaded_at": "2026-03-01T05:05:00+00:00",
-              "unloaded_at": "2026-03-03T19:00:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
               "loaded_qty_kg": 50.0
             },
             "segment": {
               "segment_id": "SG-03",
-              "issued_at": "2026-03-03T08:00:00+00:00",
+              "issued_at": "2026-03-03T03:00:00+00:00",
               "issued_qty_kg": 1.1,
               "issued_to": "焊工班组"
             },
@@ -1664,11 +2053,11 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": "W-008",
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -1680,10 +2069,58 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
+            "open_reject_welds": [
+              "W-001"
+            ]
+          }
+        },
+        {
+          "code": "WM-EXPOSURE-EXCEEDED",
+          "severity": "hold",
+          "category": "consumable",
+          "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+          "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+          "weld_no": "W-008",
+          "lot_id": null,
+          "nde_id": null,
+          "repair_id": null,
+          "report_no": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-03",
+          "bake_id": null,
+          "stay_id": null,
+          "use_id": "CU-008",
+          "evidence": {
+            "use_id": "CU-008",
+            "issued_at": "2026-03-03T03:00:00+00:00",
+            "used_at": "2026-03-03T09:00:00+00:00",
+            "exposure_minutes": 360.0,
+            "max_exposure_minutes": 240.0
+          }
+        },
+        {
+          "code": "WM-EXPOSURE-EXCEEDED",
+          "severity": "hold",
+          "category": "consumable",
+          "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+          "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+          "weld_no": "W-008",
+          "lot_id": null,
+          "nde_id": null,
+          "repair_id": null,
+          "report_no": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-03",
+          "bake_id": null,
+          "stay_id": null,
+          "use_id": "CU-008",
+          "evidence": {
+            "scope": "production",
+            "use_id": "CU-008",
+            "batch_id": "WM-E5015-2602",
+            "segment_id": "SG-03",
+            "exposure_minutes": 360.0,
+            "exposure_limit_minutes": 240.0
           }
         }
       ]
@@ -1738,9 +2175,11 @@
           "segment_id": "SG-03",
           "qty_kg": 0.2,
           "used_at": "2026-03-03T09:00:00+00:00",
-          "consumable_valid": true,
-          "reasons": [],
-          "exposure_minutes": 60.0,
+          "consumable_valid": false,
+          "reasons": [
+            "WM-EXPOSURE-EXCEEDED"
+          ],
+          "exposure_minutes": 360.0,
           "exposure_limit_minutes": 240.0,
           "chain": {
             "use_id": "CU-009",
@@ -1784,12 +2223,12 @@
               "quiver_id": "QV-1",
               "quiver_version": "2026A",
               "loaded_at": "2026-03-01T05:05:00+00:00",
-              "unloaded_at": "2026-03-03T19:00:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
               "loaded_qty_kg": 50.0
             },
             "segment": {
               "segment_id": "SG-03",
-              "issued_at": "2026-03-03T08:00:00+00:00",
+              "issued_at": "2026-03-03T03:00:00+00:00",
               "issued_qty_kg": 1.1,
               "issued_to": "焊工班组"
             },
@@ -1808,11 +2247,11 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": "W-009",
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -1824,10 +2263,58 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
+            "open_reject_welds": [
+              "W-001"
+            ]
+          }
+        },
+        {
+          "code": "WM-EXPOSURE-EXCEEDED",
+          "severity": "hold",
+          "category": "consumable",
+          "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+          "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+          "weld_no": "W-009",
+          "lot_id": null,
+          "nde_id": null,
+          "repair_id": null,
+          "report_no": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-03",
+          "bake_id": null,
+          "stay_id": null,
+          "use_id": "CU-009",
+          "evidence": {
+            "use_id": "CU-009",
+            "issued_at": "2026-03-03T03:00:00+00:00",
+            "used_at": "2026-03-03T09:00:00+00:00",
+            "exposure_minutes": 360.0,
+            "max_exposure_minutes": 240.0
+          }
+        },
+        {
+          "code": "WM-EXPOSURE-EXCEEDED",
+          "severity": "hold",
+          "category": "consumable",
+          "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+          "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+          "weld_no": "W-009",
+          "lot_id": null,
+          "nde_id": null,
+          "repair_id": null,
+          "report_no": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-03",
+          "bake_id": null,
+          "stay_id": null,
+          "use_id": "CU-009",
+          "evidence": {
+            "scope": "production",
+            "use_id": "CU-009",
+            "batch_id": "WM-E5015-2602",
+            "segment_id": "SG-03",
+            "exposure_minutes": 360.0,
+            "exposure_limit_minutes": 240.0
           }
         }
       ]
@@ -1882,9 +2369,11 @@
           "segment_id": "SG-03",
           "qty_kg": 0.2,
           "used_at": "2026-03-03T09:00:00+00:00",
-          "consumable_valid": true,
-          "reasons": [],
-          "exposure_minutes": 60.0,
+          "consumable_valid": false,
+          "reasons": [
+            "WM-EXPOSURE-EXCEEDED"
+          ],
+          "exposure_minutes": 360.0,
           "exposure_limit_minutes": 240.0,
           "chain": {
             "use_id": "CU-010",
@@ -1928,12 +2417,12 @@
               "quiver_id": "QV-1",
               "quiver_version": "2026A",
               "loaded_at": "2026-03-01T05:05:00+00:00",
-              "unloaded_at": "2026-03-03T19:00:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
               "loaded_qty_kg": 50.0
             },
             "segment": {
               "segment_id": "SG-03",
-              "issued_at": "2026-03-03T08:00:00+00:00",
+              "issued_at": "2026-03-03T03:00:00+00:00",
               "issued_qty_kg": 1.1,
               "issued_to": "焊工班组"
             },
@@ -1952,11 +2441,11 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-SAMPLE-INSUFFICIENT",
+          "code": "LT-OPEN-REJECT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
           "weld_no": "W-010",
           "lot_id": "LOT-A",
           "nde_id": null,
@@ -1968,10 +2457,58 @@
           "stay_id": null,
           "use_id": null,
           "evidence": {
-            "required_initial": 2,
-            "examined": 0,
-            "ratio_required": 0.2,
-            "ratio_actual": 0.0
+            "open_reject_welds": [
+              "W-001"
+            ]
+          }
+        },
+        {
+          "code": "WM-EXPOSURE-EXCEEDED",
+          "severity": "hold",
+          "category": "consumable",
+          "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+          "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+          "weld_no": "W-010",
+          "lot_id": null,
+          "nde_id": null,
+          "repair_id": null,
+          "report_no": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-03",
+          "bake_id": null,
+          "stay_id": null,
+          "use_id": "CU-010",
+          "evidence": {
+            "use_id": "CU-010",
+            "issued_at": "2026-03-03T03:00:00+00:00",
+            "used_at": "2026-03-03T09:00:00+00:00",
+            "exposure_minutes": 360.0,
+            "max_exposure_minutes": 240.0
+          }
+        },
+        {
+          "code": "WM-EXPOSURE-EXCEEDED",
+          "severity": "hold",
+          "category": "consumable",
+          "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+          "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+          "weld_no": "W-010",
+          "lot_id": null,
+          "nde_id": null,
+          "repair_id": null,
+          "report_no": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-03",
+          "bake_id": null,
+          "stay_id": null,
+          "use_id": "CU-010",
+          "evidence": {
+            "scope": "production",
+            "use_id": "CU-010",
+            "batch_id": "WM-E5015-2602",
+            "segment_id": "SG-03",
+            "exposure_minutes": 360.0,
+            "exposure_limit_minutes": 240.0
           }
         }
       ]
@@ -2031,7 +2568,7 @@
         "kind": "quiver",
         "serial_no": "SN-QV-1",
         "calibrated_from": "2026-01-01T00:00:00Z",
-        "calibrated_to": "2026-12-31T23:59:59Z"
+        "calibrated_to": "2026-03-04T00:00:00Z"
       }
     ],
     "bake_cycles": [
@@ -2068,7 +2605,7 @@
         "quiver_id": "QV-1",
         "quiver_version": "2026A",
         "loaded_at": "2026-03-01T05:05:00Z",
-        "unloaded_at": "2026-03-03T19:00:00Z",
+        "unloaded_at": "2026-03-05T19:00:00Z",
         "loaded_qty_kg": 50.0,
         "readings": [
           {
@@ -2196,7 +2733,103 @@
             "temp_c": 120.0
           },
           {
-            "at": "2026-03-03T19:00:00Z",
+            "at": "2026-03-03T19:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T21:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T23:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T01:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T03:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T05:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T07:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T09:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T11:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T13:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T15:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T17:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T19:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T21:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T23:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T01:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T03:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T05:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T07:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T09:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T11:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T13:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T15:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T17:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T19:00:00Z",
             "temp_c": 120.0
           }
         ]
@@ -2223,8 +2856,16 @@
         "segment_id": "SG-03",
         "batch_id": "WM-E5015-2602",
         "stay_id": "ST-1",
-        "issued_at": "2026-03-03T08:00:00Z",
+        "issued_at": "2026-03-03T03:00:00Z",
         "issued_qty_kg": 1.1,
+        "issued_to": "焊工班组"
+      },
+      {
+        "segment_id": "SG-05",
+        "batch_id": "WM-E5015-2602",
+        "stay_id": "ST-1",
+        "issued_at": "2026-03-05T08:00:00Z",
+        "issued_qty_kg": 0.6,
         "issued_to": "焊工班组"
       }
     ],
@@ -2249,18 +2890,130 @@
         "event_type": "return",
         "at": "2026-03-03T18:00:00Z",
         "qty_kg": 0.5
+      },
+      {
+        "event_id": "EV-R05",
+        "segment_id": "SG-05",
+        "event_type": "return",
+        "at": "2026-03-05T18:00:00Z",
+        "qty_kg": 0.5
       }
     ],
-    "invalid_uses": [],
-    "chain_findings": []
+    "invalid_uses": [
+      {
+        "use_id": "CU-008",
+        "scope": "production",
+        "weld_no": "W-008",
+        "repair_id": null,
+        "iteration": null,
+        "batch_id": "WM-E5015-2602",
+        "segment_id": "SG-03",
+        "used_at": "2026-03-03T09:00:00+00:00",
+        "qty_kg": 0.2,
+        "exposure_minutes": 360.0,
+        "exposure_limit_minutes": 240.0,
+        "reasons": [
+          "WM-EXPOSURE-EXCEEDED"
+        ]
+      },
+      {
+        "use_id": "CU-009",
+        "scope": "production",
+        "weld_no": "W-009",
+        "repair_id": null,
+        "iteration": null,
+        "batch_id": "WM-E5015-2602",
+        "segment_id": "SG-03",
+        "used_at": "2026-03-03T09:00:00+00:00",
+        "qty_kg": 0.2,
+        "exposure_minutes": 360.0,
+        "exposure_limit_minutes": 240.0,
+        "reasons": [
+          "WM-EXPOSURE-EXCEEDED"
+        ]
+      },
+      {
+        "use_id": "CU-010",
+        "scope": "production",
+        "weld_no": "W-010",
+        "repair_id": null,
+        "iteration": null,
+        "batch_id": "WM-E5015-2602",
+        "segment_id": "SG-03",
+        "used_at": "2026-03-03T09:00:00+00:00",
+        "qty_kg": 0.2,
+        "exposure_minutes": 360.0,
+        "exposure_limit_minutes": 240.0,
+        "reasons": [
+          "WM-EXPOSURE-EXCEEDED"
+        ]
+      },
+      {
+        "use_id": "CU-011",
+        "scope": "repair",
+        "weld_no": "W-001",
+        "repair_id": "R-001",
+        "iteration": 1,
+        "batch_id": "WM-E5015-2602",
+        "segment_id": "SG-05",
+        "used_at": "2026-03-05T10:00:00+00:00",
+        "qty_kg": 6.0,
+        "exposure_minutes": 120.0,
+        "exposure_limit_minutes": 240.0,
+        "reasons": [
+          "WM-CONTAINER-CALIBRATION",
+          "WM-QTY-CONSERVATION"
+        ]
+      }
+    ],
+    "chain_findings": [
+      {
+        "code": "WM-CONTAINER-CALIBRATION",
+        "severity": "hold",
+        "category": "consumable",
+        "reference": "计量体系：烘箱、保温筒的测温/控温装置应在校准有效期内使用；跨到期点的时段不得整体采信",
+        "message": "烘箱/保温筒校准有效期未持续覆盖使用时段（含跨到期点）",
+        "batch_id": "WM-E5015-2602",
+        "segment_id": null,
+        "bake_id": "BK-1",
+        "stay_id": "ST-1",
+        "evidence": {
+          "container_id": "QV-1",
+          "version": "2026A",
+          "calibrated_from": "2026-01-01T00:00:00+00:00",
+          "calibrated_to": "2026-03-04T00:00:00+00:00",
+          "used_from": "2026-03-01T05:05:00+00:00",
+          "used_to": "2026-03-05T19:00:00+00:00"
+        }
+      },
+      {
+        "code": "WM-QTY-CONSERVATION",
+        "severity": "hold",
+        "category": "consumable",
+        "reference": "质量体系：焊材发放、回收、报废数量应与消耗相符（账物相符），同一数量不得重复分配",
+        "message": "数量守恒失败：领用段的消耗+退回+报废数量超出领出数量（同一数量被重复分配）",
+        "batch_id": "WM-E5015-2602",
+        "segment_id": "SG-05",
+        "bake_id": null,
+        "stay_id": null,
+        "evidence": {
+          "segment_id": "SG-05",
+          "reason": "消耗+退回+报废数量超过领出数量（同一数量被重复分配）",
+          "issued_qty_kg": 0.6,
+          "used_qty_kg": 6.0,
+          "returned_qty_kg": 0.5,
+          "scrapped_qty_kg": 0
+        }
+      }
+    ]
   },
   "findings": [
     {
-      "code": "LT-SAMPLE-INSUFFICIENT",
+      "code": "LT-OPEN-REJECT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
       "weld_no": "W-001",
       "lot_id": "LOT-A",
       "nde_id": null,
@@ -2272,89 +3025,91 @@
       "stay_id": null,
       "use_id": null,
       "evidence": {
-        "required_initial": 2,
-        "examined": 0,
-        "ratio_required": 0.2,
-        "ratio_actual": 0.0
-      }
-    },
-    {
-      "code": "NR-CERT-EXPIRED",
-      "severity": "hold",
-      "category": "nde",
-      "reference": "TSG Z8001：证书应在有效期内实施检测；跨到期点的夜班时段不得整体采信",
-      "message": "人员证书未在整个检测实施时段内持续有效（时段跨过到期点或检测时证书尚未生效）",
-      "weld_no": "W-001",
-      "lot_id": null,
-      "nde_id": "N-001",
-      "repair_id": null,
-      "report_no": "RT-2026-N-001",
-      "batch_id": null,
-      "segment_id": null,
-      "bake_id": null,
-      "stay_id": null,
-      "use_id": null,
-      "evidence": {
-        "role": "examiner",
-        "target": "NRT-II-ZHANG",
-        "reason": "证书有效期 2026-01-01T00:00:00+00:00 ~ 2026-03-06T00:00:00+00:00 未持续覆盖实施时段 2026-03-05T22:00:00+00:00 ~ 2026-03-06T02:00:00+00:00",
-        "period": {
-          "started_at": "2026-03-05T22:00:00+00:00",
-          "finished_at": "2026-03-06T02:00:00+00:00"
-        },
-        "valid_from": "2026-01-01T00:00:00+00:00",
-        "valid_to": "2026-03-06T00:00:00+00:00",
-        "period_start": "2026-03-05T22:00:00+00:00",
-        "period_end": "2026-03-06T02:00:00+00:00"
-      }
-    },
-    {
-      "code": "NR-RECORD-EXCLUDED",
-      "severity": "hold",
-      "category": "nde",
-      "reference": "质量记录完整性：人员资格或设备状态在检测当时无效的报告不得计入抽检、扩检与返修复检",
-      "message": "该检测报告因 NDT 资源核验未通过，已从抽检/扩检/返修复检计数中剔除（同一张底片不能既覆盖焊缝又覆盖资源资格）",
-      "weld_no": "W-001",
-      "lot_id": null,
-      "nde_id": "N-001",
-      "repair_id": null,
-      "report_no": "RT-2026-N-001",
-      "batch_id": null,
-      "segment_id": null,
-      "bake_id": null,
-      "stay_id": null,
-      "use_id": null,
-      "evidence": {
-        "report_no": "RT-2026-N-001",
-        "period": {
-          "started_at": "2026-03-05T22:00:00+00:00",
-          "finished_at": "2026-03-06T02:00:00+00:00"
-        },
-        "reasons": [
-          "NR-CERT-EXPIRED"
-        ],
-        "examiner_cert_no": "NRT-II-ZHANG",
-        "reviewer_cert_no": "NRT-II-LI",
-        "equipment": [
-          {
-            "equipment_id": "XR-250",
-            "version": "2026A",
-            "role": "main"
-          },
-          {
-            "equipment_id": "FILM-T2",
-            "version": "2026A",
-            "role": "accessory"
-          }
+        "open_reject_welds": [
+          "W-001"
         ]
       }
     },
     {
-      "code": "LT-SAMPLE-INSUFFICIENT",
+      "code": "RP-WM-INVALID",
+      "severity": "hold",
+      "category": "repair",
+      "reference": "GB 50236 / GB/T 20801：返修补焊所用焊材必须合规；超时、断档、校准失效或已报废焊材不得用于返修闭合",
+      "message": "返修补焊消耗的焊材未通过批次/烘干/保温/领用链核验，失效焊材不得用于返修闭合（具体 WM 条款随附）",
+      "weld_no": "W-001",
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": "R-001",
+      "report_no": null,
+      "batch_id": null,
+      "segment_id": null,
+      "bake_id": null,
+      "stay_id": null,
+      "use_id": null,
+      "evidence": {
+        "iteration": 1,
+        "wm_codes": [
+          "WM-CONTAINER-CALIBRATION",
+          "WM-QTY-CONSERVATION"
+        ]
+      }
+    },
+    {
+      "code": "WM-CONTAINER-CALIBRATION",
+      "severity": "hold",
+      "category": "consumable",
+      "reference": "计量体系：烘箱、保温筒的测温/控温装置应在校准有效期内使用；跨到期点的时段不得整体采信",
+      "message": "烘箱/保温筒校准有效期未持续覆盖使用时段（含跨到期点）",
+      "weld_no": "W-001",
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": "R-001",
+      "report_no": null,
+      "batch_id": "WM-E5015-2602",
+      "segment_id": "SG-05",
+      "bake_id": null,
+      "stay_id": null,
+      "use_id": "CU-011",
+      "evidence": {
+        "scope": "repair",
+        "use_id": "CU-011",
+        "batch_id": "WM-E5015-2602",
+        "segment_id": "SG-05",
+        "exposure_minutes": 120.0,
+        "exposure_limit_minutes": 240.0
+      }
+    },
+    {
+      "code": "WM-QTY-CONSERVATION",
+      "severity": "hold",
+      "category": "consumable",
+      "reference": "质量体系：焊材发放、回收、报废数量应与消耗相符（账物相符），同一数量不得重复分配",
+      "message": "数量守恒失败：领用段的消耗+退回+报废数量超出领出数量（同一数量被重复分配）",
+      "weld_no": "W-001",
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": "R-001",
+      "report_no": null,
+      "batch_id": "WM-E5015-2602",
+      "segment_id": "SG-05",
+      "bake_id": null,
+      "stay_id": null,
+      "use_id": "CU-011",
+      "evidence": {
+        "scope": "repair",
+        "use_id": "CU-011",
+        "batch_id": "WM-E5015-2602",
+        "segment_id": "SG-05",
+        "exposure_minutes": 120.0,
+        "exposure_limit_minutes": 240.0
+      }
+    },
+    {
+      "code": "LT-OPEN-REJECT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
       "weld_no": "W-002",
       "lot_id": "LOT-A",
       "nde_id": null,
@@ -2366,18 +3121,17 @@
       "stay_id": null,
       "use_id": null,
       "evidence": {
-        "required_initial": 2,
-        "examined": 0,
-        "ratio_required": 0.2,
-        "ratio_actual": 0.0
+        "open_reject_welds": [
+          "W-001"
+        ]
       }
     },
     {
-      "code": "LT-SAMPLE-INSUFFICIENT",
+      "code": "LT-OPEN-REJECT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
       "weld_no": "W-003",
       "lot_id": "LOT-A",
       "nde_id": null,
@@ -2389,18 +3143,17 @@
       "stay_id": null,
       "use_id": null,
       "evidence": {
-        "required_initial": 2,
-        "examined": 0,
-        "ratio_required": 0.2,
-        "ratio_actual": 0.0
+        "open_reject_welds": [
+          "W-001"
+        ]
       }
     },
     {
-      "code": "LT-SAMPLE-INSUFFICIENT",
+      "code": "LT-OPEN-REJECT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
       "weld_no": "W-004",
       "lot_id": "LOT-A",
       "nde_id": null,
@@ -2412,18 +3165,17 @@
       "stay_id": null,
       "use_id": null,
       "evidence": {
-        "required_initial": 2,
-        "examined": 0,
-        "ratio_required": 0.2,
-        "ratio_actual": 0.0
+        "open_reject_welds": [
+          "W-001"
+        ]
       }
     },
     {
-      "code": "LT-SAMPLE-INSUFFICIENT",
+      "code": "LT-OPEN-REJECT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
       "weld_no": "W-005",
       "lot_id": "LOT-A",
       "nde_id": null,
@@ -2435,18 +3187,17 @@
       "stay_id": null,
       "use_id": null,
       "evidence": {
-        "required_initial": 2,
-        "examined": 0,
-        "ratio_required": 0.2,
-        "ratio_actual": 0.0
+        "open_reject_welds": [
+          "W-001"
+        ]
       }
     },
     {
-      "code": "LT-SAMPLE-INSUFFICIENT",
+      "code": "LT-OPEN-REJECT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
       "weld_no": "W-006",
       "lot_id": "LOT-A",
       "nde_id": null,
@@ -2458,74 +3209,17 @@
       "stay_id": null,
       "use_id": null,
       "evidence": {
-        "required_initial": 2,
-        "examined": 0,
-        "ratio_required": 0.2,
-        "ratio_actual": 0.0
+        "open_reject_welds": [
+          "W-001"
+        ]
       }
     },
     {
-      "code": "NR-EQUIP-MISSING",
-      "severity": "hold",
-      "category": "nde",
-      "reference": "质量记录完整性：检测报告应可追溯所用设备的具体校准版本",
-      "message": "检测记录引用的设备版本（或其关键附件版本）未登记（引用缺失）",
-      "weld_no": "W-006",
-      "lot_id": null,
-      "nde_id": "N-002",
-      "repair_id": null,
-      "report_no": "RT-2026-N-002",
-      "batch_id": null,
-      "segment_id": null,
-      "bake_id": null,
-      "stay_id": null,
-      "use_id": null,
-      "evidence": {
-        "role": "main",
-        "target": "XR-250@2026B",
-        "reason": "设备版本 XR-250@2026B 未登记（引用缺失）",
-        "period": {
-          "started_at": "2026-03-08T12:00:00+00:00",
-          "finished_at": "2026-03-08T14:00:00+00:00"
-        }
-      }
-    },
-    {
-      "code": "NR-RECORD-EXCLUDED",
-      "severity": "hold",
-      "category": "nde",
-      "reference": "质量记录完整性：人员资格或设备状态在检测当时无效的报告不得计入抽检、扩检与返修复检",
-      "message": "该检测报告因 NDT 资源核验未通过，已从抽检/扩检/返修复检计数中剔除（同一张底片不能既覆盖焊缝又覆盖资源资格）",
-      "weld_no": "W-006",
-      "lot_id": null,
-      "nde_id": "N-002",
-      "repair_id": null,
-      "report_no": "RT-2026-N-002",
-      "batch_id": null,
-      "segment_id": null,
-      "bake_id": null,
-      "stay_id": null,
-      "use_id": null,
-      "evidence": {
-        "report_no": "RT-2026-N-002",
-        "period": {
-          "started_at": "2026-03-08T12:00:00+00:00",
-          "finished_at": "2026-03-08T14:00:00+00:00"
-        },
-        "reasons": [
-          "NR-EQUIP-MISSING"
-        ],
-        "examiner_cert_no": "NRT-II-ZHANG-R2",
-        "reviewer_cert_no": "NRT-II-LI",
-        "equipment": []
-      }
-    },
-    {
-      "code": "LT-SAMPLE-INSUFFICIENT",
+      "code": "LT-OPEN-REJECT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
       "weld_no": "W-007",
       "lot_id": "LOT-A",
       "nde_id": null,
@@ -2537,18 +3231,17 @@
       "stay_id": null,
       "use_id": null,
       "evidence": {
-        "required_initial": 2,
-        "examined": 0,
-        "ratio_required": 0.2,
-        "ratio_actual": 0.0
+        "open_reject_welds": [
+          "W-001"
+        ]
       }
     },
     {
-      "code": "LT-SAMPLE-INSUFFICIENT",
+      "code": "LT-OPEN-REJECT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
       "weld_no": "W-008",
       "lot_id": "LOT-A",
       "nde_id": null,
@@ -2560,18 +3253,66 @@
       "stay_id": null,
       "use_id": null,
       "evidence": {
-        "required_initial": 2,
-        "examined": 0,
-        "ratio_required": 0.2,
-        "ratio_actual": 0.0
+        "open_reject_welds": [
+          "W-001"
+        ]
       }
     },
     {
-      "code": "LT-SAMPLE-INSUFFICIENT",
+      "code": "WM-EXPOSURE-EXCEEDED",
+      "severity": "hold",
+      "category": "consumable",
+      "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+      "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+      "weld_no": "W-008",
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": null,
+      "report_no": null,
+      "batch_id": "WM-E5015-2602",
+      "segment_id": "SG-03",
+      "bake_id": null,
+      "stay_id": null,
+      "use_id": "CU-008",
+      "evidence": {
+        "use_id": "CU-008",
+        "issued_at": "2026-03-03T03:00:00+00:00",
+        "used_at": "2026-03-03T09:00:00+00:00",
+        "exposure_minutes": 360.0,
+        "max_exposure_minutes": 240.0
+      }
+    },
+    {
+      "code": "WM-EXPOSURE-EXCEEDED",
+      "severity": "hold",
+      "category": "consumable",
+      "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+      "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+      "weld_no": "W-008",
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": null,
+      "report_no": null,
+      "batch_id": "WM-E5015-2602",
+      "segment_id": "SG-03",
+      "bake_id": null,
+      "stay_id": null,
+      "use_id": "CU-008",
+      "evidence": {
+        "scope": "production",
+        "use_id": "CU-008",
+        "batch_id": "WM-E5015-2602",
+        "segment_id": "SG-03",
+        "exposure_minutes": 360.0,
+        "exposure_limit_minutes": 240.0
+      }
+    },
+    {
+      "code": "LT-OPEN-REJECT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
       "weld_no": "W-009",
       "lot_id": "LOT-A",
       "nde_id": null,
@@ -2583,18 +3324,66 @@
       "stay_id": null,
       "use_id": null,
       "evidence": {
-        "required_initial": 2,
-        "examined": 0,
-        "ratio_required": 0.2,
-        "ratio_actual": 0.0
+        "open_reject_welds": [
+          "W-001"
+        ]
       }
     },
     {
-      "code": "LT-SAMPLE-INSUFFICIENT",
+      "code": "WM-EXPOSURE-EXCEEDED",
+      "severity": "hold",
+      "category": "consumable",
+      "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+      "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+      "weld_no": "W-009",
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": null,
+      "report_no": null,
+      "batch_id": "WM-E5015-2602",
+      "segment_id": "SG-03",
+      "bake_id": null,
+      "stay_id": null,
+      "use_id": "CU-009",
+      "evidence": {
+        "use_id": "CU-009",
+        "issued_at": "2026-03-03T03:00:00+00:00",
+        "used_at": "2026-03-03T09:00:00+00:00",
+        "exposure_minutes": 360.0,
+        "max_exposure_minutes": 240.0
+      }
+    },
+    {
+      "code": "WM-EXPOSURE-EXCEEDED",
+      "severity": "hold",
+      "category": "consumable",
+      "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+      "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+      "weld_no": "W-009",
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": null,
+      "report_no": null,
+      "batch_id": "WM-E5015-2602",
+      "segment_id": "SG-03",
+      "bake_id": null,
+      "stay_id": null,
+      "use_id": "CU-009",
+      "evidence": {
+        "scope": "production",
+        "use_id": "CU-009",
+        "batch_id": "WM-E5015-2602",
+        "segment_id": "SG-03",
+        "exposure_minutes": 360.0,
+        "exposure_limit_minutes": 240.0
+      }
+    },
+    {
+      "code": "LT-OPEN-REJECT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
-      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
       "weld_no": "W-010",
       "lot_id": "LOT-A",
       "nde_id": null,
@@ -2606,18 +3395,117 @@
       "stay_id": null,
       "use_id": null,
       "evidence": {
-        "required_initial": 2,
-        "examined": 0,
-        "ratio_required": 0.2,
-        "ratio_actual": 0.0
+        "open_reject_welds": [
+          "W-001"
+        ]
+      }
+    },
+    {
+      "code": "WM-EXPOSURE-EXCEEDED",
+      "severity": "hold",
+      "category": "consumable",
+      "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+      "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+      "weld_no": "W-010",
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": null,
+      "report_no": null,
+      "batch_id": "WM-E5015-2602",
+      "segment_id": "SG-03",
+      "bake_id": null,
+      "stay_id": null,
+      "use_id": "CU-010",
+      "evidence": {
+        "use_id": "CU-010",
+        "issued_at": "2026-03-03T03:00:00+00:00",
+        "used_at": "2026-03-03T09:00:00+00:00",
+        "exposure_minutes": 360.0,
+        "max_exposure_minutes": 240.0
+      }
+    },
+    {
+      "code": "WM-EXPOSURE-EXCEEDED",
+      "severity": "hold",
+      "category": "consumable",
+      "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+      "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，仍继续用于施焊",
+      "weld_no": "W-010",
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": null,
+      "report_no": null,
+      "batch_id": "WM-E5015-2602",
+      "segment_id": "SG-03",
+      "bake_id": null,
+      "stay_id": null,
+      "use_id": "CU-010",
+      "evidence": {
+        "scope": "production",
+        "use_id": "CU-010",
+        "batch_id": "WM-E5015-2602",
+        "segment_id": "SG-03",
+        "exposure_minutes": 360.0,
+        "exposure_limit_minutes": 240.0
+      }
+    },
+    {
+      "code": "WM-CONTAINER-CALIBRATION",
+      "severity": "hold",
+      "category": "consumable",
+      "reference": "计量体系：烘箱、保温筒的测温/控温装置应在校准有效期内使用；跨到期点的时段不得整体采信",
+      "message": "烘箱/保温筒校准有效期未持续覆盖使用时段（含跨到期点）",
+      "weld_no": null,
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": null,
+      "report_no": null,
+      "batch_id": "WM-E5015-2602",
+      "segment_id": null,
+      "bake_id": "BK-1",
+      "stay_id": "ST-1",
+      "use_id": null,
+      "evidence": {
+        "container_id": "QV-1",
+        "version": "2026A",
+        "calibrated_from": "2026-01-01T00:00:00+00:00",
+        "calibrated_to": "2026-03-04T00:00:00+00:00",
+        "used_from": "2026-03-01T05:05:00+00:00",
+        "used_to": "2026-03-05T19:00:00+00:00"
+      }
+    },
+    {
+      "code": "WM-QTY-CONSERVATION",
+      "severity": "hold",
+      "category": "consumable",
+      "reference": "质量体系：焊材发放、回收、报废数量应与消耗相符（账物相符），同一数量不得重复分配",
+      "message": "数量守恒失败：领用段的消耗+退回+报废数量超出领出数量（同一数量被重复分配）",
+      "weld_no": null,
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": null,
+      "report_no": null,
+      "batch_id": "WM-E5015-2602",
+      "segment_id": "SG-05",
+      "bake_id": null,
+      "stay_id": null,
+      "use_id": null,
+      "evidence": {
+        "segment_id": "SG-05",
+        "reason": "消耗+退回+报废数量超过领出数量（同一数量被重复分配）",
+        "issued_qty_kg": 0.6,
+        "used_qty_kg": 6.0,
+        "returned_qty_kg": 0.5,
+        "scrapped_qty_kg": 0
       }
     }
   ],
   "clauses_triggered": [
-    "LT-SAMPLE-INSUFFICIENT",
-    "NR-CERT-EXPIRED",
-    "NR-EQUIP-MISSING",
-    "NR-RECORD-EXCLUDED"
+    "LT-OPEN-REJECT",
+    "RP-WM-INVALID",
+    "WM-CONTAINER-CALIBRATION",
+    "WM-EXPOSURE-EXCEEDED",
+    "WM-QTY-CONSERVATION"
   ],
-  "evaluated_at": "2026-09-12 15:01:02.627233+00:00"
+  "evaluated_at": "2026-09-12 15:01:02.653748+00:00"
 }

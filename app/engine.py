@@ -766,19 +766,44 @@ def evaluate(payload: SubmissionPayload) -> dict:
     repair_consumable_invalid: dict[str, bool] = {}
     repair_consumable_codes: dict[str, list[str]] = defaultdict(list)
     repair_consumable_links: dict[str, list[dict]] = defaultdict(list)
+    production_use_views: dict[str, list[dict]] = defaultdict(list)
     if wm["enabled"]:
+        def _use_view(state: dict) -> dict:
+            """逐耗扁平视图：生产消耗、返修消耗与版本差异共用同一数据结构。"""
+            return {
+                "use_id": state["use_id"],
+                "scope": state["scope"],
+                "weld_no": state["weld_no"],
+                "repair_id": state["repair_id"],
+                "iteration": state["iteration"],
+                "batch_id": state["batch_id"],
+                "segment_id": state["segment_id"],
+                "qty_kg": state["qty_kg"],
+                "used_at": state["used_at"],
+                "consumable_valid": state["consumable_valid"],
+                "reasons": list(state["reasons"]),
+                "exposure_minutes": state.get("exposure_minutes"),
+                "exposure_limit_minutes": state.get("exposure_limit_minutes"),
+                "chain": state["chain"],
+            }
+
+        use_views = {uid: _use_view(s)
+                     for uid, s in wm["use_states"].items()}
+        for uid, view in use_views.items():
+            if view["scope"] == "production":
+                production_use_views[view["weld_no"]].append(view)
+
         # 消耗级失败：直接挂到归属焊口（返修消耗同时标 repair_id）
         for fail in wm["failures"]:
             finding = _wm_finding(fail)
             if fail.get("scope"):
                 wm_findings_by_weld[fail["weld_no"]].append(finding)
-                if fail.get("repair_id"):
-                    repair_consumable_codes[fail["repair_id"]].append(
-                        fail["code"])
             else:
                 wm_chain_findings.append(finding)
-        # 实体级（批次/烘干/暂存/领用段）失败传播到挂在其下的全部消耗：
-        # 由每耗 use_states 的 reasons 反推，逐焊口去重挂条款。
+
+        # 实体级（批次/烘干/暂存/领用段）失败已在 verify_consumables 内
+        # 按实际归属传播到每耗 reasons（段级数量问题只影响该 segment_id 下
+        # 的消耗，不会错指其它段或连带无关焊口）。
         for state in wm["use_states"].values():
             weld_no = state["weld_no"]
             for code in state["reasons"]:
@@ -797,13 +822,20 @@ def evaluate(payload: SubmissionPayload) -> dict:
                                   state.get("exposure_limit_minutes")},
                 )
                 wm_findings_by_weld[weld_no].append(finding)
-                if state["repair_id"]:
-                    repair_consumable_codes[state["repair_id"]].append(code)
             if state["scope"] == "repair":
-                links = state["chain"]
-                repair_consumable_links[state["repair_id"]].append(links)
+                repair_consumable_links[state["repair_id"]].append(
+                    use_views[state["use_id"]])
                 if not state["consumable_valid"]:
                     repair_consumable_invalid[state["repair_id"]] = True
+                    repair_consumable_codes[state["repair_id"]].extend(
+                        state["reasons"])
+
+        # 返修未挂任何实际消耗：失效焊材不得用于返修闭合
+        for rep in payload.repairs:
+            if not rep.consumables:
+                repair_consumable_invalid[rep.repair_id] = True
+                repair_consumable_codes[rep.repair_id].append(
+                    "WM-CONSUMABLE-UNTRACED")
 
     def _dedup_findings(items: list[dict]) -> list[dict]:
         seen: set[tuple] = set()
@@ -864,13 +896,7 @@ def evaluate(payload: SubmissionPayload) -> dict:
     def _production_use_links(weld_no: str) -> list[dict]:
         if not wm["enabled"]:
             return []
-        return [s["chain"] | {"consumable_valid": s["consumable_valid"],
-                              "reasons": s["reasons"],
-                              "exposure_minutes": s.get("exposure_minutes"),
-                              "exposure_limit_minutes":
-                                  s.get("exposure_limit_minutes")}
-                for s in wm["use_states"].values()
-                if s["scope"] == "production" and s["weld_no"] == weld_no]
+        return list(production_use_views.get(weld_no, []))
 
     for weld in payload.welds:
         base = weld_results[weld.weld_no]
@@ -1046,6 +1072,9 @@ def _consumables_block(payload: SubmissionPayload, wm: dict) -> dict:
     ]
     return {
         "enabled": True,
+        "completeness": wm.get("completeness", {"gaps": [],
+                                               "affected_welds": []}),
+        "freeze_blocked": wm.get("freeze_blocked", False),
         "batches": [b.model_dump(mode="json") for b in payload.consumable_batches],
         "rules": [r.model_dump(mode="json") for r in payload.consumable_rules],
         "containers": [c.model_dump(mode="json")

@@ -315,9 +315,12 @@ def _readings(start, end, *, hours_step, temp):
 def valid_consumable_chain(welds, repairs=(), *, batch_id="WM-E5015-2602",
                            rule=None, batch=None, containers=None,
                            use_qty_weld=0.2, use_qty_repair=0.1,
-                           issue_weld_uses: dict | None = None):
+                           issue_weld_uses: dict | None = None,
+                           reserve_kg: float = 0.5):
     """按焊口/返修的日期自动构造一条合规焊材链。
 
+    每段领用领出量 = 当日实际消耗 + reserve_kg，余量 18:00 退回，保证
+    数量恰好闭合（裁剪返修/焊口后，段仍按裁剪后的消耗量构造，不出现 WM-QTY-OPEN）。
     返回 dict(batches, rules, containers, bake_cycles, quiver_stays,
               segments, events) 及已挂到 welds/repairs 上的消耗。
     issue_weld_uses: 可选 {weld_no: qty} 覆盖逐口消耗量。
@@ -398,19 +401,18 @@ def valid_consumable_chain(welds, repairs=(), *, batch_id="WM-E5015-2602",
                 segment_id=seg_id, qty_kg=use_qty_repair,
                 used_at=r.repaired_at))
             used += use_qty_repair
-        # 当日领 5kg，未消耗余量 18:00 退回闭合
-        issued_qty = 5.0
-        returned = round(issued_qty - used, 3)
+        # 当日领出 = 实际消耗 + 预留余量，未消耗余量 18:00 退回，数量恰好闭合
+        issued_qty = round(used + reserve_kg, 3)
+        returned = reserve_kg
         segments.append(ConsumableIssueSegment(
             segment_id=seg_id, batch_id=batch_id, stay_id="ST-1",
             issued_at=issued_at, issued_qty_kg=issued_qty,
             issued_to="焊工班组"))
-        if returned > 1e-9:
-            events.append(ConsumableSegmentEvent(
-                event_id=f"EV-R{day:02d}", segment_id=seg_id,
-                event_type="return",
-                at=_dt(2026, 3, day, 18, 0, tzinfo=timezone.utc),
-                qty_kg=returned))
+        events.append(ConsumableSegmentEvent(
+            event_id=f"EV-R{day:02d}", segment_id=seg_id,
+            event_type="return",
+            at=_dt(2026, 3, day, 18, 0, tzinfo=timezone.utc),
+            qty_kg=returned))
 
     return {
         "consumable_batches": [batch],
@@ -638,10 +640,12 @@ def consumable_failure_payload() -> SubmissionPayload:
         for u in rep.consumables:
             u.qty_kg = 6.0
 
-    # 3/8 段提前到 03:00 领出 -> W-008 09:00 施焊暴露 6h > 4h 上限
+    # SG-03 段提前到 03:00 领出 -> W-008 09:00 施焊暴露 6h > 4h 上限
+    # （WM-EXPOSURE-EXCEEDED）；3/3 仍在保温筒校准有效期内（3/4 到期），
+    # 故该段只命中暴露超时，与 3/5 段的数量/校准问题各自独立定位。
     for seg in wm_chain["consumable_segments"]:
-        if seg.segment_id == "SG-08":
-            seg.issued_at = _dt(2026, 3, 8, 3, 0, tzinfo=timezone.utc)
+        if seg.segment_id == "SG-03":
+            seg.issued_at = _dt(2026, 3, 3, 3, 0, tzinfo=timezone.utc)
 
     return SubmissionPayload(
         package_ref="DEMO-5-WELD-MATERIAL",

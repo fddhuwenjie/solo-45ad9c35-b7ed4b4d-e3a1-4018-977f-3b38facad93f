@@ -13,7 +13,11 @@
     "nde_reports_total": 5,
     "nde_reports_excluded": 0,
     "nde_personnel_total": 2,
-    "nde_equipment_versions_total": 2
+    "nde_equipment_versions_total": 2,
+    "consumable_chain_enabled": true,
+    "consumable_batches_total": 1,
+    "consumable_uses_total": 11,
+    "consumable_uses_invalid": 0
   },
   "nde_resources": {
     "personnel": [
@@ -427,7 +431,163 @@
               "report_no": "RT-2026-N-051"
             }
           ],
+          "consumable_uses": [
+            {
+              "use_id": "CU-011",
+              "scope": "repair",
+              "weld_no": "W-001",
+              "repair_id": "R-001",
+              "iteration": 1,
+              "batch_id": "WM-E5015-2602",
+              "segment_id": "SG-05",
+              "qty_kg": 0.1,
+              "used_at": "2026-03-05T10:00:00+00:00",
+              "consumable_valid": true,
+              "reasons": [],
+              "exposure_minutes": 120.0,
+              "exposure_limit_minutes": 240.0,
+              "chain": {
+                "use_id": "CU-011",
+                "qty_kg": 0.1,
+                "used_at": "2026-03-05T10:00:00+00:00",
+                "batch": {
+                  "batch_id": "WM-E5015-2602",
+                  "classification": "E5015",
+                  "designation": "J507",
+                  "manufacturer_lot_no": "LOT-J507-260201",
+                  "cert_no": "MTC-LOT-J507-260201",
+                  "cert_lot_no": "LOT-J507-260201",
+                  "received_status": "accepted",
+                  "applicable_wps": [
+                    "WPS-101"
+                  ]
+                },
+                "rule": {
+                  "classification": "E5015",
+                  "bake_temp_min_c": 350.0,
+                  "bake_temp_max_c": 400.0,
+                  "min_soak_minutes": 60.0,
+                  "holding_temp_min_c": 100.0,
+                  "holding_temp_max_c": 150.0,
+                  "max_exposure_minutes": 240.0,
+                  "max_bake_cycles": 2,
+                  "max_transfer_minutes": 15.0,
+                  "max_log_gap_minutes": 180.0
+                },
+                "bake": {
+                  "bake_id": "BK-1",
+                  "cycle_no": 1,
+                  "oven_id": "OV-1",
+                  "oven_version": "2026A",
+                  "loaded_at": "2026-03-01T04:00:00+00:00",
+                  "unloaded_at": "2026-03-01T05:00:00+00:00",
+                  "loaded_qty_kg": 50.0
+                },
+                "stay": {
+                  "stay_id": "ST-1",
+                  "quiver_id": "QV-1",
+                  "quiver_version": "2026A",
+                  "loaded_at": "2026-03-01T05:05:00+00:00",
+                  "unloaded_at": "2026-03-05T19:00:00+00:00",
+                  "loaded_qty_kg": 50.0
+                },
+                "segment": {
+                  "segment_id": "SG-05",
+                  "issued_at": "2026-03-05T08:00:00+00:00",
+                  "issued_qty_kg": 0.6,
+                  "issued_to": "焊工班组"
+                },
+                "events": [
+                  {
+                    "event_id": "EV-R05",
+                    "segment_id": "SG-05",
+                    "event_type": "return",
+                    "at": "2026-03-05T18:00:00Z",
+                    "qty_kg": 0.5
+                  }
+                ]
+              }
+            }
+          ],
           "closed": true
+        }
+      ],
+      "consumable_uses": [
+        {
+          "use_id": "CU-001",
+          "scope": "production",
+          "weld_no": "W-001",
+          "repair_id": null,
+          "iteration": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-01",
+          "qty_kg": 0.2,
+          "used_at": "2026-03-01T09:00:00+00:00",
+          "consumable_valid": true,
+          "reasons": [],
+          "exposure_minutes": 60.0,
+          "exposure_limit_minutes": 240.0,
+          "chain": {
+            "use_id": "CU-001",
+            "qty_kg": 0.2,
+            "used_at": "2026-03-01T09:00:00+00:00",
+            "batch": {
+              "batch_id": "WM-E5015-2602",
+              "classification": "E5015",
+              "designation": "J507",
+              "manufacturer_lot_no": "LOT-J507-260201",
+              "cert_no": "MTC-LOT-J507-260201",
+              "cert_lot_no": "LOT-J507-260201",
+              "received_status": "accepted",
+              "applicable_wps": [
+                "WPS-101"
+              ]
+            },
+            "rule": {
+              "classification": "E5015",
+              "bake_temp_min_c": 350.0,
+              "bake_temp_max_c": 400.0,
+              "min_soak_minutes": 60.0,
+              "holding_temp_min_c": 100.0,
+              "holding_temp_max_c": 150.0,
+              "max_exposure_minutes": 240.0,
+              "max_bake_cycles": 2,
+              "max_transfer_minutes": 15.0,
+              "max_log_gap_minutes": 180.0
+            },
+            "bake": {
+              "bake_id": "BK-1",
+              "cycle_no": 1,
+              "oven_id": "OV-1",
+              "oven_version": "2026A",
+              "loaded_at": "2026-03-01T04:00:00+00:00",
+              "unloaded_at": "2026-03-01T05:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "stay": {
+              "stay_id": "ST-1",
+              "quiver_id": "QV-1",
+              "quiver_version": "2026A",
+              "loaded_at": "2026-03-01T05:05:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "segment": {
+              "segment_id": "SG-01",
+              "issued_at": "2026-03-01T08:00:00+00:00",
+              "issued_qty_kg": 1.1,
+              "issued_to": "焊工班组"
+            },
+            "events": [
+              {
+                "event_id": "EV-R01",
+                "segment_id": "SG-01",
+                "event_type": "return",
+                "at": "2026-03-01T18:00:00Z",
+                "qty_kg": 0.5
+              }
+            ]
+          }
         }
       ],
       "decision": "release",
@@ -591,6 +751,84 @@
         }
       ],
       "repairs": [],
+      "consumable_uses": [
+        {
+          "use_id": "CU-002",
+          "scope": "production",
+          "weld_no": "W-002",
+          "repair_id": null,
+          "iteration": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-01",
+          "qty_kg": 0.2,
+          "used_at": "2026-03-01T09:00:00+00:00",
+          "consumable_valid": true,
+          "reasons": [],
+          "exposure_minutes": 60.0,
+          "exposure_limit_minutes": 240.0,
+          "chain": {
+            "use_id": "CU-002",
+            "qty_kg": 0.2,
+            "used_at": "2026-03-01T09:00:00+00:00",
+            "batch": {
+              "batch_id": "WM-E5015-2602",
+              "classification": "E5015",
+              "designation": "J507",
+              "manufacturer_lot_no": "LOT-J507-260201",
+              "cert_no": "MTC-LOT-J507-260201",
+              "cert_lot_no": "LOT-J507-260201",
+              "received_status": "accepted",
+              "applicable_wps": [
+                "WPS-101"
+              ]
+            },
+            "rule": {
+              "classification": "E5015",
+              "bake_temp_min_c": 350.0,
+              "bake_temp_max_c": 400.0,
+              "min_soak_minutes": 60.0,
+              "holding_temp_min_c": 100.0,
+              "holding_temp_max_c": 150.0,
+              "max_exposure_minutes": 240.0,
+              "max_bake_cycles": 2,
+              "max_transfer_minutes": 15.0,
+              "max_log_gap_minutes": 180.0
+            },
+            "bake": {
+              "bake_id": "BK-1",
+              "cycle_no": 1,
+              "oven_id": "OV-1",
+              "oven_version": "2026A",
+              "loaded_at": "2026-03-01T04:00:00+00:00",
+              "unloaded_at": "2026-03-01T05:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "stay": {
+              "stay_id": "ST-1",
+              "quiver_id": "QV-1",
+              "quiver_version": "2026A",
+              "loaded_at": "2026-03-01T05:05:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "segment": {
+              "segment_id": "SG-01",
+              "issued_at": "2026-03-01T08:00:00+00:00",
+              "issued_qty_kg": 1.1,
+              "issued_to": "焊工班组"
+            },
+            "events": [
+              {
+                "event_id": "EV-R01",
+                "segment_id": "SG-01",
+                "event_type": "return",
+                "at": "2026-03-01T18:00:00Z",
+                "qty_kg": 0.5
+              }
+            ]
+          }
+        }
+      ],
       "decision": "release",
       "findings": []
     },
@@ -633,6 +871,84 @@
       "nde_excluded_count": 0,
       "nde": [],
       "repairs": [],
+      "consumable_uses": [
+        {
+          "use_id": "CU-003",
+          "scope": "production",
+          "weld_no": "W-003",
+          "repair_id": null,
+          "iteration": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-01",
+          "qty_kg": 0.2,
+          "used_at": "2026-03-01T09:00:00+00:00",
+          "consumable_valid": true,
+          "reasons": [],
+          "exposure_minutes": 60.0,
+          "exposure_limit_minutes": 240.0,
+          "chain": {
+            "use_id": "CU-003",
+            "qty_kg": 0.2,
+            "used_at": "2026-03-01T09:00:00+00:00",
+            "batch": {
+              "batch_id": "WM-E5015-2602",
+              "classification": "E5015",
+              "designation": "J507",
+              "manufacturer_lot_no": "LOT-J507-260201",
+              "cert_no": "MTC-LOT-J507-260201",
+              "cert_lot_no": "LOT-J507-260201",
+              "received_status": "accepted",
+              "applicable_wps": [
+                "WPS-101"
+              ]
+            },
+            "rule": {
+              "classification": "E5015",
+              "bake_temp_min_c": 350.0,
+              "bake_temp_max_c": 400.0,
+              "min_soak_minutes": 60.0,
+              "holding_temp_min_c": 100.0,
+              "holding_temp_max_c": 150.0,
+              "max_exposure_minutes": 240.0,
+              "max_bake_cycles": 2,
+              "max_transfer_minutes": 15.0,
+              "max_log_gap_minutes": 180.0
+            },
+            "bake": {
+              "bake_id": "BK-1",
+              "cycle_no": 1,
+              "oven_id": "OV-1",
+              "oven_version": "2026A",
+              "loaded_at": "2026-03-01T04:00:00+00:00",
+              "unloaded_at": "2026-03-01T05:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "stay": {
+              "stay_id": "ST-1",
+              "quiver_id": "QV-1",
+              "quiver_version": "2026A",
+              "loaded_at": "2026-03-01T05:05:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "segment": {
+              "segment_id": "SG-01",
+              "issued_at": "2026-03-01T08:00:00+00:00",
+              "issued_qty_kg": 1.1,
+              "issued_to": "焊工班组"
+            },
+            "events": [
+              {
+                "event_id": "EV-R01",
+                "segment_id": "SG-01",
+                "event_type": "return",
+                "at": "2026-03-01T18:00:00Z",
+                "qty_kg": 0.5
+              }
+            ]
+          }
+        }
+      ],
       "decision": "release",
       "findings": []
     },
@@ -675,6 +991,84 @@
       "nde_excluded_count": 0,
       "nde": [],
       "repairs": [],
+      "consumable_uses": [
+        {
+          "use_id": "CU-004",
+          "scope": "production",
+          "weld_no": "W-004",
+          "repair_id": null,
+          "iteration": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-02",
+          "qty_kg": 0.2,
+          "used_at": "2026-03-02T09:00:00+00:00",
+          "consumable_valid": true,
+          "reasons": [],
+          "exposure_minutes": 60.0,
+          "exposure_limit_minutes": 240.0,
+          "chain": {
+            "use_id": "CU-004",
+            "qty_kg": 0.2,
+            "used_at": "2026-03-02T09:00:00+00:00",
+            "batch": {
+              "batch_id": "WM-E5015-2602",
+              "classification": "E5015",
+              "designation": "J507",
+              "manufacturer_lot_no": "LOT-J507-260201",
+              "cert_no": "MTC-LOT-J507-260201",
+              "cert_lot_no": "LOT-J507-260201",
+              "received_status": "accepted",
+              "applicable_wps": [
+                "WPS-101"
+              ]
+            },
+            "rule": {
+              "classification": "E5015",
+              "bake_temp_min_c": 350.0,
+              "bake_temp_max_c": 400.0,
+              "min_soak_minutes": 60.0,
+              "holding_temp_min_c": 100.0,
+              "holding_temp_max_c": 150.0,
+              "max_exposure_minutes": 240.0,
+              "max_bake_cycles": 2,
+              "max_transfer_minutes": 15.0,
+              "max_log_gap_minutes": 180.0
+            },
+            "bake": {
+              "bake_id": "BK-1",
+              "cycle_no": 1,
+              "oven_id": "OV-1",
+              "oven_version": "2026A",
+              "loaded_at": "2026-03-01T04:00:00+00:00",
+              "unloaded_at": "2026-03-01T05:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "stay": {
+              "stay_id": "ST-1",
+              "quiver_id": "QV-1",
+              "quiver_version": "2026A",
+              "loaded_at": "2026-03-01T05:05:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "segment": {
+              "segment_id": "SG-02",
+              "issued_at": "2026-03-02T08:00:00+00:00",
+              "issued_qty_kg": 1.3,
+              "issued_to": "焊工班组"
+            },
+            "events": [
+              {
+                "event_id": "EV-R02",
+                "segment_id": "SG-02",
+                "event_type": "return",
+                "at": "2026-03-02T18:00:00Z",
+                "qty_kg": 0.5
+              }
+            ]
+          }
+        }
+      ],
       "decision": "release",
       "findings": []
     },
@@ -717,6 +1111,84 @@
       "nde_excluded_count": 0,
       "nde": [],
       "repairs": [],
+      "consumable_uses": [
+        {
+          "use_id": "CU-005",
+          "scope": "production",
+          "weld_no": "W-005",
+          "repair_id": null,
+          "iteration": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-02",
+          "qty_kg": 0.2,
+          "used_at": "2026-03-02T09:00:00+00:00",
+          "consumable_valid": true,
+          "reasons": [],
+          "exposure_minutes": 60.0,
+          "exposure_limit_minutes": 240.0,
+          "chain": {
+            "use_id": "CU-005",
+            "qty_kg": 0.2,
+            "used_at": "2026-03-02T09:00:00+00:00",
+            "batch": {
+              "batch_id": "WM-E5015-2602",
+              "classification": "E5015",
+              "designation": "J507",
+              "manufacturer_lot_no": "LOT-J507-260201",
+              "cert_no": "MTC-LOT-J507-260201",
+              "cert_lot_no": "LOT-J507-260201",
+              "received_status": "accepted",
+              "applicable_wps": [
+                "WPS-101"
+              ]
+            },
+            "rule": {
+              "classification": "E5015",
+              "bake_temp_min_c": 350.0,
+              "bake_temp_max_c": 400.0,
+              "min_soak_minutes": 60.0,
+              "holding_temp_min_c": 100.0,
+              "holding_temp_max_c": 150.0,
+              "max_exposure_minutes": 240.0,
+              "max_bake_cycles": 2,
+              "max_transfer_minutes": 15.0,
+              "max_log_gap_minutes": 180.0
+            },
+            "bake": {
+              "bake_id": "BK-1",
+              "cycle_no": 1,
+              "oven_id": "OV-1",
+              "oven_version": "2026A",
+              "loaded_at": "2026-03-01T04:00:00+00:00",
+              "unloaded_at": "2026-03-01T05:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "stay": {
+              "stay_id": "ST-1",
+              "quiver_id": "QV-1",
+              "quiver_version": "2026A",
+              "loaded_at": "2026-03-01T05:05:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "segment": {
+              "segment_id": "SG-02",
+              "issued_at": "2026-03-02T08:00:00+00:00",
+              "issued_qty_kg": 1.3,
+              "issued_to": "焊工班组"
+            },
+            "events": [
+              {
+                "event_id": "EV-R02",
+                "segment_id": "SG-02",
+                "event_type": "return",
+                "at": "2026-03-02T18:00:00Z",
+                "qty_kg": 0.5
+              }
+            ]
+          }
+        }
+      ],
       "decision": "release",
       "findings": []
     },
@@ -878,6 +1350,84 @@
         }
       ],
       "repairs": [],
+      "consumable_uses": [
+        {
+          "use_id": "CU-006",
+          "scope": "production",
+          "weld_no": "W-006",
+          "repair_id": null,
+          "iteration": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-02",
+          "qty_kg": 0.2,
+          "used_at": "2026-03-02T09:00:00+00:00",
+          "consumable_valid": true,
+          "reasons": [],
+          "exposure_minutes": 60.0,
+          "exposure_limit_minutes": 240.0,
+          "chain": {
+            "use_id": "CU-006",
+            "qty_kg": 0.2,
+            "used_at": "2026-03-02T09:00:00+00:00",
+            "batch": {
+              "batch_id": "WM-E5015-2602",
+              "classification": "E5015",
+              "designation": "J507",
+              "manufacturer_lot_no": "LOT-J507-260201",
+              "cert_no": "MTC-LOT-J507-260201",
+              "cert_lot_no": "LOT-J507-260201",
+              "received_status": "accepted",
+              "applicable_wps": [
+                "WPS-101"
+              ]
+            },
+            "rule": {
+              "classification": "E5015",
+              "bake_temp_min_c": 350.0,
+              "bake_temp_max_c": 400.0,
+              "min_soak_minutes": 60.0,
+              "holding_temp_min_c": 100.0,
+              "holding_temp_max_c": 150.0,
+              "max_exposure_minutes": 240.0,
+              "max_bake_cycles": 2,
+              "max_transfer_minutes": 15.0,
+              "max_log_gap_minutes": 180.0
+            },
+            "bake": {
+              "bake_id": "BK-1",
+              "cycle_no": 1,
+              "oven_id": "OV-1",
+              "oven_version": "2026A",
+              "loaded_at": "2026-03-01T04:00:00+00:00",
+              "unloaded_at": "2026-03-01T05:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "stay": {
+              "stay_id": "ST-1",
+              "quiver_id": "QV-1",
+              "quiver_version": "2026A",
+              "loaded_at": "2026-03-01T05:05:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "segment": {
+              "segment_id": "SG-02",
+              "issued_at": "2026-03-02T08:00:00+00:00",
+              "issued_qty_kg": 1.3,
+              "issued_to": "焊工班组"
+            },
+            "events": [
+              {
+                "event_id": "EV-R02",
+                "segment_id": "SG-02",
+                "event_type": "return",
+                "at": "2026-03-02T18:00:00Z",
+                "qty_kg": 0.5
+              }
+            ]
+          }
+        }
+      ],
       "decision": "release",
       "findings": []
     },
@@ -1039,6 +1589,84 @@
         }
       ],
       "repairs": [],
+      "consumable_uses": [
+        {
+          "use_id": "CU-007",
+          "scope": "production",
+          "weld_no": "W-007",
+          "repair_id": null,
+          "iteration": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-02",
+          "qty_kg": 0.2,
+          "used_at": "2026-03-02T09:00:00+00:00",
+          "consumable_valid": true,
+          "reasons": [],
+          "exposure_minutes": 60.0,
+          "exposure_limit_minutes": 240.0,
+          "chain": {
+            "use_id": "CU-007",
+            "qty_kg": 0.2,
+            "used_at": "2026-03-02T09:00:00+00:00",
+            "batch": {
+              "batch_id": "WM-E5015-2602",
+              "classification": "E5015",
+              "designation": "J507",
+              "manufacturer_lot_no": "LOT-J507-260201",
+              "cert_no": "MTC-LOT-J507-260201",
+              "cert_lot_no": "LOT-J507-260201",
+              "received_status": "accepted",
+              "applicable_wps": [
+                "WPS-101"
+              ]
+            },
+            "rule": {
+              "classification": "E5015",
+              "bake_temp_min_c": 350.0,
+              "bake_temp_max_c": 400.0,
+              "min_soak_minutes": 60.0,
+              "holding_temp_min_c": 100.0,
+              "holding_temp_max_c": 150.0,
+              "max_exposure_minutes": 240.0,
+              "max_bake_cycles": 2,
+              "max_transfer_minutes": 15.0,
+              "max_log_gap_minutes": 180.0
+            },
+            "bake": {
+              "bake_id": "BK-1",
+              "cycle_no": 1,
+              "oven_id": "OV-1",
+              "oven_version": "2026A",
+              "loaded_at": "2026-03-01T04:00:00+00:00",
+              "unloaded_at": "2026-03-01T05:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "stay": {
+              "stay_id": "ST-1",
+              "quiver_id": "QV-1",
+              "quiver_version": "2026A",
+              "loaded_at": "2026-03-01T05:05:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "segment": {
+              "segment_id": "SG-02",
+              "issued_at": "2026-03-02T08:00:00+00:00",
+              "issued_qty_kg": 1.3,
+              "issued_to": "焊工班组"
+            },
+            "events": [
+              {
+                "event_id": "EV-R02",
+                "segment_id": "SG-02",
+                "event_type": "return",
+                "at": "2026-03-02T18:00:00Z",
+                "qty_kg": 0.5
+              }
+            ]
+          }
+        }
+      ],
       "decision": "release",
       "findings": []
     },
@@ -1081,6 +1709,84 @@
       "nde_excluded_count": 0,
       "nde": [],
       "repairs": [],
+      "consumable_uses": [
+        {
+          "use_id": "CU-008",
+          "scope": "production",
+          "weld_no": "W-008",
+          "repair_id": null,
+          "iteration": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-03",
+          "qty_kg": 0.2,
+          "used_at": "2026-03-03T09:00:00+00:00",
+          "consumable_valid": true,
+          "reasons": [],
+          "exposure_minutes": 60.0,
+          "exposure_limit_minutes": 240.0,
+          "chain": {
+            "use_id": "CU-008",
+            "qty_kg": 0.2,
+            "used_at": "2026-03-03T09:00:00+00:00",
+            "batch": {
+              "batch_id": "WM-E5015-2602",
+              "classification": "E5015",
+              "designation": "J507",
+              "manufacturer_lot_no": "LOT-J507-260201",
+              "cert_no": "MTC-LOT-J507-260201",
+              "cert_lot_no": "LOT-J507-260201",
+              "received_status": "accepted",
+              "applicable_wps": [
+                "WPS-101"
+              ]
+            },
+            "rule": {
+              "classification": "E5015",
+              "bake_temp_min_c": 350.0,
+              "bake_temp_max_c": 400.0,
+              "min_soak_minutes": 60.0,
+              "holding_temp_min_c": 100.0,
+              "holding_temp_max_c": 150.0,
+              "max_exposure_minutes": 240.0,
+              "max_bake_cycles": 2,
+              "max_transfer_minutes": 15.0,
+              "max_log_gap_minutes": 180.0
+            },
+            "bake": {
+              "bake_id": "BK-1",
+              "cycle_no": 1,
+              "oven_id": "OV-1",
+              "oven_version": "2026A",
+              "loaded_at": "2026-03-01T04:00:00+00:00",
+              "unloaded_at": "2026-03-01T05:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "stay": {
+              "stay_id": "ST-1",
+              "quiver_id": "QV-1",
+              "quiver_version": "2026A",
+              "loaded_at": "2026-03-01T05:05:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "segment": {
+              "segment_id": "SG-03",
+              "issued_at": "2026-03-03T08:00:00+00:00",
+              "issued_qty_kg": 1.1,
+              "issued_to": "焊工班组"
+            },
+            "events": [
+              {
+                "event_id": "EV-R03",
+                "segment_id": "SG-03",
+                "event_type": "return",
+                "at": "2026-03-03T18:00:00Z",
+                "qty_kg": 0.5
+              }
+            ]
+          }
+        }
+      ],
       "decision": "release",
       "findings": []
     },
@@ -1123,6 +1829,84 @@
       "nde_excluded_count": 0,
       "nde": [],
       "repairs": [],
+      "consumable_uses": [
+        {
+          "use_id": "CU-009",
+          "scope": "production",
+          "weld_no": "W-009",
+          "repair_id": null,
+          "iteration": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-03",
+          "qty_kg": 0.2,
+          "used_at": "2026-03-03T09:00:00+00:00",
+          "consumable_valid": true,
+          "reasons": [],
+          "exposure_minutes": 60.0,
+          "exposure_limit_minutes": 240.0,
+          "chain": {
+            "use_id": "CU-009",
+            "qty_kg": 0.2,
+            "used_at": "2026-03-03T09:00:00+00:00",
+            "batch": {
+              "batch_id": "WM-E5015-2602",
+              "classification": "E5015",
+              "designation": "J507",
+              "manufacturer_lot_no": "LOT-J507-260201",
+              "cert_no": "MTC-LOT-J507-260201",
+              "cert_lot_no": "LOT-J507-260201",
+              "received_status": "accepted",
+              "applicable_wps": [
+                "WPS-101"
+              ]
+            },
+            "rule": {
+              "classification": "E5015",
+              "bake_temp_min_c": 350.0,
+              "bake_temp_max_c": 400.0,
+              "min_soak_minutes": 60.0,
+              "holding_temp_min_c": 100.0,
+              "holding_temp_max_c": 150.0,
+              "max_exposure_minutes": 240.0,
+              "max_bake_cycles": 2,
+              "max_transfer_minutes": 15.0,
+              "max_log_gap_minutes": 180.0
+            },
+            "bake": {
+              "bake_id": "BK-1",
+              "cycle_no": 1,
+              "oven_id": "OV-1",
+              "oven_version": "2026A",
+              "loaded_at": "2026-03-01T04:00:00+00:00",
+              "unloaded_at": "2026-03-01T05:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "stay": {
+              "stay_id": "ST-1",
+              "quiver_id": "QV-1",
+              "quiver_version": "2026A",
+              "loaded_at": "2026-03-01T05:05:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "segment": {
+              "segment_id": "SG-03",
+              "issued_at": "2026-03-03T08:00:00+00:00",
+              "issued_qty_kg": 1.1,
+              "issued_to": "焊工班组"
+            },
+            "events": [
+              {
+                "event_id": "EV-R03",
+                "segment_id": "SG-03",
+                "event_type": "return",
+                "at": "2026-03-03T18:00:00Z",
+                "qty_kg": 0.5
+              }
+            ]
+          }
+        }
+      ],
       "decision": "release",
       "findings": []
     },
@@ -1165,11 +1949,477 @@
       "nde_excluded_count": 0,
       "nde": [],
       "repairs": [],
+      "consumable_uses": [
+        {
+          "use_id": "CU-010",
+          "scope": "production",
+          "weld_no": "W-010",
+          "repair_id": null,
+          "iteration": null,
+          "batch_id": "WM-E5015-2602",
+          "segment_id": "SG-03",
+          "qty_kg": 0.2,
+          "used_at": "2026-03-03T09:00:00+00:00",
+          "consumable_valid": true,
+          "reasons": [],
+          "exposure_minutes": 60.0,
+          "exposure_limit_minutes": 240.0,
+          "chain": {
+            "use_id": "CU-010",
+            "qty_kg": 0.2,
+            "used_at": "2026-03-03T09:00:00+00:00",
+            "batch": {
+              "batch_id": "WM-E5015-2602",
+              "classification": "E5015",
+              "designation": "J507",
+              "manufacturer_lot_no": "LOT-J507-260201",
+              "cert_no": "MTC-LOT-J507-260201",
+              "cert_lot_no": "LOT-J507-260201",
+              "received_status": "accepted",
+              "applicable_wps": [
+                "WPS-101"
+              ]
+            },
+            "rule": {
+              "classification": "E5015",
+              "bake_temp_min_c": 350.0,
+              "bake_temp_max_c": 400.0,
+              "min_soak_minutes": 60.0,
+              "holding_temp_min_c": 100.0,
+              "holding_temp_max_c": 150.0,
+              "max_exposure_minutes": 240.0,
+              "max_bake_cycles": 2,
+              "max_transfer_minutes": 15.0,
+              "max_log_gap_minutes": 180.0
+            },
+            "bake": {
+              "bake_id": "BK-1",
+              "cycle_no": 1,
+              "oven_id": "OV-1",
+              "oven_version": "2026A",
+              "loaded_at": "2026-03-01T04:00:00+00:00",
+              "unloaded_at": "2026-03-01T05:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "stay": {
+              "stay_id": "ST-1",
+              "quiver_id": "QV-1",
+              "quiver_version": "2026A",
+              "loaded_at": "2026-03-01T05:05:00+00:00",
+              "unloaded_at": "2026-03-05T19:00:00+00:00",
+              "loaded_qty_kg": 50.0
+            },
+            "segment": {
+              "segment_id": "SG-03",
+              "issued_at": "2026-03-03T08:00:00+00:00",
+              "issued_qty_kg": 1.1,
+              "issued_to": "焊工班组"
+            },
+            "events": [
+              {
+                "event_id": "EV-R03",
+                "segment_id": "SG-03",
+                "event_type": "return",
+                "at": "2026-03-03T18:00:00Z",
+                "qty_kg": 0.5
+              }
+            ]
+          }
+        }
+      ],
       "decision": "release",
       "findings": []
     }
   ],
+  "consumables": {
+    "enabled": true,
+    "completeness": {
+      "gaps": [],
+      "affected_welds": []
+    },
+    "freeze_blocked": false,
+    "batches": [
+      {
+        "batch_id": "WM-E5015-2602",
+        "classification": "E5015",
+        "designation": "J507",
+        "manufacturer": "某焊材厂",
+        "manufacturer_lot_no": "LOT-J507-260201",
+        "cert_no": "MTC-LOT-J507-260201",
+        "cert_lot_no": "LOT-J507-260201",
+        "received_status": "accepted",
+        "received_qty_kg": 50.0,
+        "applicable_wps": [
+          "WPS-101"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "classification": "E5015",
+        "bake_temp_min_c": 350.0,
+        "bake_temp_max_c": 400.0,
+        "min_soak_minutes": 60.0,
+        "holding_temp_min_c": 100.0,
+        "holding_temp_max_c": 150.0,
+        "max_exposure_minutes": 240.0,
+        "max_bake_cycles": 2,
+        "max_transfer_minutes": 15.0,
+        "max_log_gap_minutes": 180.0
+      }
+    ],
+    "containers": [
+      {
+        "container_id": "OV-1",
+        "version": "2026A",
+        "name": "电焊条烘干箱",
+        "kind": "oven",
+        "serial_no": "SN-OV-1",
+        "calibrated_from": "2026-01-01T00:00:00Z",
+        "calibrated_to": "2026-12-31T23:59:59Z"
+      },
+      {
+        "container_id": "QV-1",
+        "version": "2026A",
+        "name": "焊工保温筒",
+        "kind": "quiver",
+        "serial_no": "SN-QV-1",
+        "calibrated_from": "2026-01-01T00:00:00Z",
+        "calibrated_to": "2026-12-31T23:59:59Z"
+      }
+    ],
+    "bake_cycles": [
+      {
+        "bake_id": "BK-1",
+        "batch_id": "WM-E5015-2602",
+        "cycle_no": 1,
+        "oven_id": "OV-1",
+        "oven_version": "2026A",
+        "loaded_at": "2026-03-01T04:00:00Z",
+        "unloaded_at": "2026-03-01T05:00:00Z",
+        "loaded_qty_kg": 50.0,
+        "readings": [
+          {
+            "at": "2026-03-01T04:00:00Z",
+            "temp_c": 380.0
+          },
+          {
+            "at": "2026-03-01T04:30:00Z",
+            "temp_c": 380.0
+          },
+          {
+            "at": "2026-03-01T05:00:00Z",
+            "temp_c": 380.0
+          }
+        ]
+      }
+    ],
+    "quiver_stays": [
+      {
+        "stay_id": "ST-1",
+        "batch_id": "WM-E5015-2602",
+        "bake_id": "BK-1",
+        "quiver_id": "QV-1",
+        "quiver_version": "2026A",
+        "loaded_at": "2026-03-01T05:05:00Z",
+        "unloaded_at": "2026-03-05T19:00:00Z",
+        "loaded_qty_kg": 50.0,
+        "readings": [
+          {
+            "at": "2026-03-01T05:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-01T07:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-01T09:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-01T11:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-01T13:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-01T15:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-01T17:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-01T19:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-01T21:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-01T23:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T01:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T03:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T05:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T07:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T09:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T11:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T13:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T15:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T17:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T19:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T21:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-02T23:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T01:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T03:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T05:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T07:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T09:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T11:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T13:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T15:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T17:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T19:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T21:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-03T23:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T01:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T03:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T05:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T07:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T09:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T11:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T13:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T15:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T17:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T19:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T21:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-04T23:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T01:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T03:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T05:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T07:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T09:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T11:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T13:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T15:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T17:05:00Z",
+            "temp_c": 120.0
+          },
+          {
+            "at": "2026-03-05T19:00:00Z",
+            "temp_c": 120.0
+          }
+        ]
+      }
+    ],
+    "segments": [
+      {
+        "segment_id": "SG-01",
+        "batch_id": "WM-E5015-2602",
+        "stay_id": "ST-1",
+        "issued_at": "2026-03-01T08:00:00Z",
+        "issued_qty_kg": 1.1,
+        "issued_to": "焊工班组"
+      },
+      {
+        "segment_id": "SG-02",
+        "batch_id": "WM-E5015-2602",
+        "stay_id": "ST-1",
+        "issued_at": "2026-03-02T08:00:00Z",
+        "issued_qty_kg": 1.3,
+        "issued_to": "焊工班组"
+      },
+      {
+        "segment_id": "SG-03",
+        "batch_id": "WM-E5015-2602",
+        "stay_id": "ST-1",
+        "issued_at": "2026-03-03T08:00:00Z",
+        "issued_qty_kg": 1.1,
+        "issued_to": "焊工班组"
+      },
+      {
+        "segment_id": "SG-05",
+        "batch_id": "WM-E5015-2602",
+        "stay_id": "ST-1",
+        "issued_at": "2026-03-05T08:00:00Z",
+        "issued_qty_kg": 0.6,
+        "issued_to": "焊工班组"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "EV-R01",
+        "segment_id": "SG-01",
+        "event_type": "return",
+        "at": "2026-03-01T18:00:00Z",
+        "qty_kg": 0.5
+      },
+      {
+        "event_id": "EV-R02",
+        "segment_id": "SG-02",
+        "event_type": "return",
+        "at": "2026-03-02T18:00:00Z",
+        "qty_kg": 0.5
+      },
+      {
+        "event_id": "EV-R03",
+        "segment_id": "SG-03",
+        "event_type": "return",
+        "at": "2026-03-03T18:00:00Z",
+        "qty_kg": 0.5
+      },
+      {
+        "event_id": "EV-R05",
+        "segment_id": "SG-05",
+        "event_type": "return",
+        "at": "2026-03-05T18:00:00Z",
+        "qty_kg": 0.5
+      }
+    ],
+    "invalid_uses": [],
+    "chain_findings": []
+  },
   "findings": [],
   "clauses_triggered": [],
-  "evaluated_at": "2026-09-12 12:19:56.492211+00:00"
+  "evaluated_at": "2026-09-12 15:01:02.569126+00:00"
 }

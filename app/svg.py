@@ -218,13 +218,24 @@ def render_weld_svg(verdict: dict) -> str:
         f"施焊: {verdict['welded_at'].strftime('%Y-%m-%d %H:%M') if hasattr(verdict['welded_at'], 'strftime') else str(verdict['welded_at'])[:16]}",
         f"返修: {len(verdict.get('repairs', []))} 次",
     ]
+    cons_uses = verdict.get("consumable_uses") or []
+    if cons_uses:
+        bad = sum(1 for u in cons_uses if not u.get("consumable_valid", True))
+        classes = sorted({
+            (u.get("chain", {}).get("batch") or {}).get("classification", "?")
+            for u in cons_uses
+        })
+        inner_lines.append(
+            f"焊材: {'/'.join(classes)} {len(cons_uses)}笔"
+            + (f" 失效{bad}" if bad else " 合规"))
     if verdict.get("nde_excluded_count"):
         inner_lines.append(
             f"剔除报告: {verdict['nde_excluded_count']} 份（资源失效）"
         )
+    base_y = CY - 52 - (12 if cons_uses else 0)
     for i, line in enumerate(inner_lines):
         parts.append(
-            f'<text x="{CX}" y="{CY - 52 + i * 24}" font-size="15" '
+            f'<text x="{CX}" y="{base_y + i * 24}" font-size="15" '
             f'fill="#37474f" text-anchor="middle">{escape(line)}</text>'
         )
 

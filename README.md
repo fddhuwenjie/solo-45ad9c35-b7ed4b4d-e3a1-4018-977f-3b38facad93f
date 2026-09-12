@@ -4,8 +4,9 @@
 
 引擎按**施焊/补焊时点**匹配 WPS/PQR 与焊工资格的认可范围（有效期、材料组别、
 厚度、管径、焊接方法/位置），按**整个检测实施时段**核验无损检测人员证书与
-设备版本，核算检验批的**抽检与扩检覆盖率**，并沿缺陷的
-**周向位置**把 `不合格显示 → 挖补返修 → 复检底片` 串成链：
+设备版本，核算检验批的**抽检与扩检覆盖率**，沿缺陷的
+**周向位置**把 `不合格显示 → 挖补返修 → 复检底片` 串成链，并沿
+**批次 → 烘干 → 保温 → 领用 → 消耗/退回/报废**核验焊材事件链：
 
 - 挖补区必须**完整覆盖**在先缺陷显示（仅角度相交不算缺陷已清除）；
 - 复检必须**晚于**补焊、同方法、覆盖挖补区，返修前旧底片不得充数；
@@ -18,6 +19,16 @@
   **不得计入抽检、扩检与返修复检**，并列出受影响焊口与报告；
 - 资质失效、组别/厚度/管径越界、缺炉批、抽检不足、返修区未复检等一律保持 hold，
   响应逐口列出焊口编号与触发条款（编号与依据见 `GET /clauses`）。
+- **焊材批次与烘干/领用链（WM 系列）**：低氢焊条领出保温筒后，批号、烘干记录与
+  暴露时长常与焊口记录分开；焊材批次登记分类号、制造批号、质保书、入库状态及
+  适用 WPS，烘箱/保温筒按校准版本登记并附温度时序，逐道焊口与返修引用实际
+  消耗批次与领用段。核算时检查 **WPS 牌号匹配、质保书与批号一致、烘干温度与
+  时长、保温连续性、最大暴露时长、重复烘干次数及数量守恒**；记录断档、设备
+  校准失效、超时焊材或同一数量被重复分配时相关焊口保持 hold，并定位批次、
+  领用段与事件区间/缺口；**失效焊材不得用于返修闭合**（`RP-WM-INVALID`）。
+  批次/制度/设备/事件/逐口消耗为空或引用缺失属**结构缺口**，审查包不得冻结
+  （`POST /review` 返回 409）或签发，只能补录后重新提交；超时/温度等
+  **规则性** hold 记录齐全时可冻结，纠错从旧版派生新版本。
 
 复核签字后**冻结输入快照**（SHA-256，含当时的人员证书与设备版本摘要），
 续证/重新校准不回写旧版；纠错只能从旧版**开修订分支**，
@@ -81,6 +92,11 @@ python examples/run_demo.py --out out/demo
 4. **NDT 资源失效**：夜班 22:00~次日 02:00 跨过实施人证书 3/6 00:00 到期点、
    另一报告换用未登记校准版本 → 两份报告被剔除，抽检数量不足整批 hold，
    触发 `NR-CERT-EXPIRED`、`NR-EQUIP-MISSING`、`NR-RECORD-EXCLUDED`。
+5. **焊材链失效**：保温筒校准 3/4 到期（3/5 补焊落在失效区间）、
+   3/3 段提前到 03:00 领出致施焊暴露 6h 超过 4h 上限、3/5 段数量重复分配
+   （消耗+退回 > 领出）→ 仅命中段内消耗失效、返修不得闭合，触发
+   `WM-CONTAINER-CALIBRATION`、`WM-EXPOSURE-EXCEEDED`、
+   `WM-QTY-CONSERVATION`、`RP-WM-INVALID`；无关领用段不被牵连。
 
 ### HTTP 流程示例
 
@@ -160,6 +176,41 @@ curl -s "localhost:8000/packages/$PID/welds/W-001/svg?version=1" -o w001.svg
   `old_invalid_reports`/`new_invalid_reports` 逐份给出焊口、报告、时段、
   失效原因与所用证书/设备版本，`changed_reports` 标出 invalid_to_valid 等状态翻转。
 
+**焊材批次与烘干领用链（WM 系列）**：载荷在 `consumable_batches`（非空即启用链）、
+`consumable_rules`（按分类号的烘干/保温/暴露制度）、`consumable_containers`
+（烘箱/保温筒校准版本，复合身份 `container_id+version`）、`bake_cycles`、
+`quiver_stays`、`consumable_segments`、`consumable_events` 中登记；每道焊口的
+`consumables` 与每次返修的 `consumables` 引用实际批次、领用段与数量。
+
+- **批次**：须 `received_status=accepted`、有质保书且质保书批号与制造批号一致、
+  分类号在 WPS 的 `consumable_classes` 清单内（牌号拿错即 `WM-WPS-CLASS-MISMATCH`）、
+  批次登记适用该 WPS、分类号有烘干制度；
+- **设备**：烘箱/保温筒引用版本须登记、用途匹配、校准有效期持续覆盖使用时段
+  （保温筒按焊材取用时点核对，到期点之后领用失效）；
+- **烘干**：温度时序须连续覆盖烘干时段（相邻读数间隔不超 `max_log_gap_minutes`）、
+  温度在烘干窗口内（越限 `WM-BAKE-TEMP`）、窗口内恒温时长达标
+  （`WM-BAKE-DURATION`）、同批次烘干预序号连续且不超 `max_bake_cycles`
+  （`WM-REBAKE-EXCEEDED`）；
+- **保温连续**：烘箱取出→保温筒装入间隔不超 `max_transfer_minutes`、领用须落在
+  暂存区间内、保温温度时序连续且在保温窗口（`WM-HOLDING-GAP`/`WM-HOLDING-TEMP`）；
+- **暴露**：自领用至施焊/补焊时长不超 `max_exposure_minutes`
+  （默认 240 分钟，超时 `WM-EXPOSURE-EXCEEDED`），退回/报废后不得再施焊；
+- **数量守恒**：消耗+退回+报废 ≤ 领出（超出即同一数量重复分配
+  `WM-QTY-CONSERVATION`），未处置余量须有退回/报废闭合（`WM-QTY-OPEN`），
+  保温装入不超烘干出箱、累计领用不超保温装入、累计烘干不超入库数量。
+  **段级数量条款只归属实际 `segment_id`，SG-01 超配不会错指 SG-03 或连带无关焊口**；
+- **返修闭合**：返修补焊消耗未通过焊材链核验即 `RP-WM-INVALID`，该次返修不得
+  闭合（随附具体 WM 码）；
+- **结构缺口**：批次/制度/设备/烘干/保温/领用段为空，或焊口/返修无逐耗、引用
+  无法解析时，`consumables.freeze_blocked=true`，`POST /review` 返回 409，
+  审查包不得冻结或签发；补录后重新提交。规则性 hold（记录齐全但超时/温度越限/
+  数量重复分配）可冻结供从旧版开修订分支；
+- 复核冻结时每耗内嵌事件链摘要（批次/制度/烘干/保温/领用段/退回报废事件），
+  `/diff` 的 `consumable_evaluation` 块对比两版：`old_codes`/`new_codes`、
+  `resolved`/`introduced`、`old_invalid_uses`/`new_invalid_uses` 逐笔给出
+  焊口/返修、批次、领用段、暴露时长与原因，`changed_uses` 标出
+  invalid_to_valid / valid_to_invalid；生产消耗与返修消耗共用同一扁平结构。
+
 ## 五、项目结构
 
 ```
@@ -169,7 +220,8 @@ app/
   geometry.py       周向角度区间：归一化、覆盖(covers)/相交、跨0°
   qualification.py  按时点匹配 WPS/PQR、焊工资格范围
   nde_resource.py   按整个实施时段核验 NDT 人员证书与设备版本
-  engine.py         审查引擎：焊接资格 + NDT 资源 + 检验批 + 返修/复检链
+  consumables.py    焊材批次/烘干制度/烘箱保温筒/领用段/逐耗事件链核验（WM 系列）
+  engine.py         审查引擎：焊接资格 + NDT 资源 + 焊材链 + 检验批 + 返修/复检链
   storage.py        SQLite：快照冻结、版本分支、差异
   svg.py            标色 SVG 焊口图
   main.py           FastAPI 路由

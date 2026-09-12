@@ -158,6 +158,20 @@ class Store:
                     f"当前版本 v{row['version']} 状态为 {row['status']}，"
                     "只有 draft 可复核签字"
                 )
+            # 焊材链结构缺口（批次/制度/设备/事件/逐口消耗为空或引用缺失）：
+            # 材料链根本无法证明，禁止冻结，只能补录后重新提交；
+            # 规则性 hold（超时/温度/数量）可冻结供从旧版开修订分支纠错。
+            result = json.loads(row["result_json"])
+            cons = result.get("consumables") or {}
+            if cons.get("enabled") and cons.get("freeze_blocked"):
+                gaps = (cons.get("completeness") or {}).get("gaps", [])
+                raise ConflictError(
+                    "焊材批次/制度/设备/事件或逐口消耗存在空项或引用缺失，"
+                    "审查包不得冻结；请补录完整材料链后重新提交。缺口: "
+                    + "；".join(
+                        f"{g['kind']}({g.get('detail', '')})" for g in gaps[:10]
+                    )
+                )
             # 冻结前校验快照哈希，防库内被篡改
             digest = sha256_hex(row["snapshot_json"].encode("utf-8"))
             if digest != row["snapshot_sha256"]:
@@ -453,45 +467,43 @@ def _nde_evaluation(old_pkg: dict, new_pkg: dict) -> dict:
 
 
 def _wm_use_states(pkg: dict) -> dict[str, dict]:
-    """从冻结评估结果抽取每次焊材消耗的事件链核验状态（供版本差异呈现）。"""
+    """从冻结评估结果抽取每次焊材消耗的事件链核验状态（供版本差异呈现）。
+
+    生产消耗与返修消耗在引擎中已是同一扁平结构（chain 为内嵌事件链摘要），
+    此处统一读取，旧版/未启用焊材链时返回空映射。
+    """
     result = pkg.get("result", {})
     states: dict[str, dict] = {}
     if not result.get("consumables", {}).get("enabled"):
         return states
+
+    def _add(weld_no: str, u: dict, *, scope: str, repair_id=None,
+             iteration=None) -> None:
+        chain = u.get("chain") or {}
+        states[u["use_id"]] = {
+            "use_id": u["use_id"],
+            "weld_no": weld_no,
+            "scope": scope,
+            "repair_id": repair_id,
+            "iteration": iteration,
+            "batch_id": u.get("batch_id")
+            or (chain.get("batch") or {}).get("batch_id"),
+            "segment_id": u.get("segment_id")
+            or (chain.get("segment") or {}).get("segment_id"),
+            "qty_kg": u.get("qty_kg", chain.get("qty_kg")),
+            "consumable_valid": bool(u.get("consumable_valid", True)),
+            "reasons": list(u.get("reasons", [])),
+            "chain": chain,
+        }
+
     for w in result.get("welds", []):
-        # 施焊消耗在焊口级 consumable_uses（chain 摘要形态）
         for u in w.get("consumable_uses", []):
-            states[u["chain"]["use_id"]] = {
-                "use_id": u["chain"]["use_id"],
-                "weld_no": w["weld_no"],
-                "scope": "production",
-                "repair_id": None,
-                "iteration": None,
-                "batch_id": u["chain"].get("batch", {}).get("batch_id")
-                if u["chain"].get("batch") else None,
-                "segment_id": u["chain"].get("segment", {}).get("segment_id")
-                if u["chain"].get("segment") else None,
-                "qty_kg": u["chain"].get("qty_kg"),
-                "consumable_valid": bool(u.get("consumable_valid", True)),
-                "reasons": list(u.get("reasons", [])),
-                "chain": u.get("chain", {}),
-            }
-        # 返修消耗在返修链节内
+            _add(w["weld_no"], u, scope="production")
         for link in w.get("repairs", []):
             for u in link.get("consumable_uses", []):
-                states[u["use_id"]] = {
-                    "use_id": u["use_id"],
-                    "weld_no": w["weld_no"],
-                    "scope": "repair",
-                    "repair_id": link["repair_id"],
-                    "iteration": link["iteration"],
-                    "batch_id": (u.get("batch") or {}).get("batch_id"),
-                    "segment_id": (u.get("segment") or {}).get("segment_id"),
-                    "qty_kg": u.get("qty_kg"),
-                    "consumable_valid": bool(u.get("consumable_valid", True)),
-                    "reasons": list(u.get("reasons", [])),
-                    "chain": u,
-                }
+                _add(w["weld_no"], u, scope="repair",
+                     repair_id=link["repair_id"],
+                     iteration=link["iteration"])
     return states
 
 
@@ -527,8 +539,10 @@ def _wm_evaluation(old_pkg: dict, new_pkg: dict) -> Optional[dict]:
         })
 
     def _invalid(states: dict[str, dict]) -> list[dict]:
-        return [{k: v for k, v in s.items() if k != "chain"}
-                for s in sorted(states.values(), key=lambda s: s["use_id"])
+        # 保留 chain 事件链摘要（批次/烘干/保温/领用段定位），与 NDE 差异
+        # 保留资源摘要同口径，便于失效定位与外部审查。
+        return [dict(s) for s in sorted(states.values(),
+                                        key=lambda s: s["use_id"])
                 if not s["consumable_valid"]]
 
     return {

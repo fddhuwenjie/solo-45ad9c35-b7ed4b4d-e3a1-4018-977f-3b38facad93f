@@ -163,6 +163,110 @@ def _in_range_minutes(pts, start: datetime, end: datetime,
 # ============================================================ 核验入口
 
 
+def _completeness(*, payload: SubmissionPayload, batches, rules, containers,
+                  bakes, stays, segments, resolved) -> dict:
+    """结构完整性：焊材批次/制度/设备/事件/逐口消耗任一为空或引用缺失即记缺口。
+
+    与规则性 hold（温度越限、超时、数量重复分配等可补录纠错的情形）不同，
+    结构缺口意味着审查包无法证明材料链存在，禁止冻结/签发，只能补录后重新提交。
+    """
+    gaps: list[dict] = []
+
+    def add(kind: str, detail: str, **ids) -> None:
+        gaps.append({"kind": kind, "detail": detail, **ids})
+
+    if not payload.consumable_batches:
+        add("batches_empty", "未登记任何焊材批次")
+    if not payload.consumable_rules:
+        add("rules_empty", "未登记任何烘干制度")
+    if not payload.consumable_containers:
+        add("containers_empty", "未登记任何烘箱/保温筒校准版本")
+    if not payload.bake_cycles:
+        add("bakes_empty", "未登记任何烘干周期")
+    if not payload.quiver_stays:
+        add("stays_empty", "未登记任何保温暂存")
+    if not payload.consumable_segments:
+        add("segments_empty", "未登记任何领用段")
+
+    # 引用缺失（不依赖规则判定）
+    for b in payload.consumable_batches:
+        if b.classification not in rules:
+            add("rule_missing",
+                f"批次 {b.batch_id} 分类号 {b.classification} 无烘干制度",
+                batch_id=b.batch_id)
+    for cyc in payload.bake_cycles:
+        if cyc.batch_id not in batches:
+            add("bake_batch_missing",
+                f"烘干周期 {cyc.bake_id} 引用未登记批次 {cyc.batch_id}",
+                bake_id=cyc.bake_id, batch_id=cyc.batch_id)
+        if (cyc.oven_id, cyc.oven_version) not in containers:
+            add("container_missing",
+                f"烘干周期 {cyc.bake_id} 引用未登记烘箱 "
+                f"{cyc.oven_id}@{cyc.oven_version}",
+                bake_id=cyc.bake_id)
+    for st in payload.quiver_stays:
+        if st.batch_id not in batches:
+            add("stay_batch_missing",
+                f"保温暂存 {st.stay_id} 引用未登记批次 {st.batch_id}",
+                stay_id=st.stay_id)
+        if st.bake_id not in bakes:
+            add("bake_missing",
+                f"保温暂存 {st.stay_id} 引用未登记烘干周期 {st.bake_id}",
+                stay_id=st.stay_id, bake_id=st.bake_id)
+        if (st.quiver_id, st.quiver_version) not in containers:
+            add("container_missing",
+                f"保温暂存 {st.stay_id} 引用未登记保温筒 "
+                f"{st.quiver_id}@{st.quiver_version}", stay_id=st.stay_id)
+    for seg in payload.consumable_segments:
+        if seg.batch_id not in batches:
+            add("segment_batch_missing",
+                f"领用段 {seg.segment_id} 引用未登记批次 {seg.batch_id}",
+                segment_id=seg.segment_id)
+        if seg.stay_id not in stays:
+            add("stay_missing",
+                f"领用段 {seg.segment_id} 引用未登记保温暂存 {seg.stay_id}",
+                segment_id=seg.segment_id, stay_id=seg.stay_id)
+    for ev in payload.consumable_events:
+        if ev.segment_id not in segments:
+            add("event_segment_missing",
+                f"事件 {ev.event_id} 引用未登记领用段 {ev.segment_id}",
+                event_id=ev.event_id, segment_id=ev.segment_id)
+
+    # 逐口/逐返修消耗：链启用后必须逐道挂账且引用可解析
+    missing_use_welds = [w.weld_no for w in payload.welds if not w.consumables]
+    missing_use_repairs = [r.repair_id for r in payload.repairs
+                           if not r.consumables]
+    for wno in missing_use_welds:
+        add("use_missing", f"焊口 {wno} 无任何焊材消耗记录", weld_no=wno)
+    for rid in missing_use_repairs:
+        add("use_missing", f"返修 {rid} 无任何焊材消耗记录", repair_id=rid)
+    for use_id, info in resolved.items():
+        if info["batch"] is None:
+            add("use_batch_missing",
+                f"消耗 {use_id} 引用未登记批次 {info['ref']['use'].batch_id}",
+                use_id=use_id,
+                batch_id=info["ref"]["use"].batch_id)
+        if info["segment"] is None:
+            add("use_segment_missing",
+                f"消耗 {use_id} 引用未登记领用段 "
+                f"{info['ref']['use'].segment_id}",
+                use_id=use_id,
+                segment_id=info["ref"]["use"].segment_id)
+
+    affected_welds = sorted({
+        *(w.weld_no for w in payload.welds if not w.consumables),
+        *(g["weld_no"] for g in gaps if g.get("weld_no")),
+        *(w.weld_no for r in payload.repairs if not r.consumables
+          for w in [next((x for x in payload.welds if x.weld_no == r.weld_no), None)]
+          if w),
+        # 批次/烘干/暂存/领用段缺口传播到其下全部焊口
+        *{info["ref"]["weld_no"]
+          for info in resolved.values()
+          if info["batch"] is None or info["segment"] is None},
+    })
+    return {"gaps": gaps, "affected_welds": affected_welds}
+
+
 def verify_consumables(payload: SubmissionPayload) -> dict:
     """核验整包焊材链。未登记任何焊材批次时返回 enabled=False（链不启用）。"""
     batches = {b.batch_id: b for b in payload.consumable_batches}
@@ -410,44 +514,43 @@ def verify_consumables(payload: SubmissionPayload) -> dict:
                               "stay_loaded_qty_kg": st.loaded_qty_kg}))
 
     for seg in payload.consumable_segments:
-        ref = {"batch_id": seg.batch_id, "stay_id": seg.stay_id,
-               "segment_id": seg.segment_id}
+        # 段级条款只挂 segment；保温交接类条款挂 stay，按段实际归属传播
+        seg_ref = {"batch_id": seg.batch_id, "segment_id": seg.segment_id}
+        stay_ref = {"batch_id": seg.batch_id, "stay_id": seg.stay_id,
+                    "segment_id": seg.segment_id}
         st = stays.get(seg.stay_id)
         if st is None:
             emit(_f("WM-SEGMENT-MISSING",
                     evidence={"segment_id": seg.segment_id,
-                              "reason": "领用段引用的保温暂存未登记"}, **ref))
+                              "reason": "领用段引用的保温暂存未登记"}, **seg_ref))
         else:
             if st.batch_id != seg.batch_id:
                 emit(_f("WM-CHAIN-GAP",
                         evidence={"segment_id": seg.segment_id,
                                   "reason": "领用段批次与其保温暂存批次不一致",
                                   "stay_batch_id": st.batch_id,
-                                  "batch_id": seg.batch_id}, **ref))
+                                  "batch_id": seg.batch_id}, **seg_ref))
             if not (st.loaded_at <= seg.issued_at):
                 emit(_f("WM-SEGMENT-ORDER",
                         evidence={"segment_id": seg.segment_id,
                                   "reason": "领用时刻早于保温筒装入时刻",
                                   "issued_at": seg.issued_at.isoformat(),
                                   "stay_loaded_at": st.loaded_at.isoformat()},
-                        **ref))
+                        **seg_ref))
             if st.unloaded_at is not None and seg.issued_at > st.unloaded_at:
                 emit(_f("WM-HOLDING-GAP",
                         evidence={"segment_id": seg.segment_id,
                                   "reason": "领用时刻晚于保温暂存结束（焊材已离筒）",
                                   "issued_at": seg.issued_at.isoformat(),
                                   "stay_unloaded_at":
-                                      st.unloaded_at.isoformat()}, **ref))
+                                      st.unloaded_at.isoformat()}, **stay_ref))
 
         evs = events_by_segment.get(seg.segment_id, [])
-        unknown_stay = st is None
-        if not unknown_stay and any(ev.at < seg.issued_at for ev in evs):
+        if st is not None and any(ev.at < seg.issued_at for ev in evs):
             emit(_f("WM-SEGMENT-ORDER",
                     evidence={"segment_id": seg.segment_id,
                               "reason": "领用段存在早于领出时刻的退回/报废事件"},
-                    **ref))
-        returned = sum(e.qty_kg for e in evs if e.event_type == "return")
-        scrapped = sum(e.qty_kg for e in evs if e.event_type == "scrap")
+                    **seg_ref))
         # 报废不超可处置数量（领出 - 已退回）
         for ev in evs:
             if ev.event_type != "scrap":
@@ -455,14 +558,14 @@ def verify_consumables(payload: SubmissionPayload) -> dict:
             prior_return = sum(e.qty_kg for e in evs
                                if e.event_type == "return" and e.at <= ev.at)
             disposable = seg.issued_qty_kg - prior_return
-            if ev.qty_kg > disposable + 1e-9:
+            if ev.qty_kg > disposable + 1e-6:
                 emit(_f("WM-SCRAP-EXCESS",
                         evidence={"segment_id": seg.segment_id,
                                   "event_id": ev.event_id,
                                   "reason": "报废数量超过该领用段可处置数量",
                                   "scrap_qty_kg": ev.qty_kg,
                                   "disposable_qty_kg": round(disposable, 3)},
-                        **ref))
+                        **seg_ref))
 
     # ------------------------------------------------ 6) 实际消耗（焊口/返修）
     # 先对每次消耗解析引用链，供逐耗判定与冻结摘要
@@ -508,7 +611,7 @@ def verify_consumables(payload: SubmissionPayload) -> dict:
         returned = sum(e.qty_kg for e in evs if e.event_type == "return")
         scrapped = sum(e.qty_kg for e in evs if e.event_type == "scrap")
         allocated = used + returned + scrapped
-        if allocated > seg.issued_qty_kg + 1e-9:
+        if allocated > seg.issued_qty_kg + 1e-6:
             emit(_f("WM-QTY-CONSERVATION",
                     evidence={"segment_id": seg.segment_id,
                               "reason": "消耗+退回+报废数量超过领出数量"
@@ -516,8 +619,8 @@ def verify_consumables(payload: SubmissionPayload) -> dict:
                               "issued_qty_kg": seg.issued_qty_kg,
                               "used_qty_kg": round(used, 3),
                               "returned_qty_kg": round(returned, 3),
-                              "scrapped_qty_kg": round(scrapped, 3)}, **ref))
-        elif not evs and abs(allocated - seg.issued_qty_kg) > 1e-9:
+                              "scrapped_qty_kg": round(scrapped, 3)}, **seg_ref))
+        elif not evs and abs(allocated - seg.issued_qty_kg) > 1e-6:
             emit(_f("WM-QTY-OPEN",
                     evidence={"segment_id": seg.segment_id,
                               "reason": "领用段无退回/报废事件且数量未闭合",
@@ -525,9 +628,9 @@ def verify_consumables(payload: SubmissionPayload) -> dict:
                               "allocated_qty_kg": round(allocated, 3),
                               "open_qty_kg":
                                   round(seg.issued_qty_kg - allocated, 3)},
-                    **ref))
-        elif evs and abs(allocated - seg.issued_qty_kg) > 1e-9 \
-                and allocated <= seg.issued_qty_kg + 1e-9:
+                    **seg_ref))
+        elif evs and abs(allocated - seg.issued_qty_kg) > 1e-6 \
+                and allocated <= seg.issued_qty_kg + 1e-6:
             emit(_f("WM-QTY-OPEN",
                     evidence={"segment_id": seg.segment_id,
                               "reason": "领用段数量未闭合（处置量与领出量不符）",
@@ -535,7 +638,7 @@ def verify_consumables(payload: SubmissionPayload) -> dict:
                               "allocated_qty_kg": round(allocated, 3),
                               "open_qty_kg":
                                   round(seg.issued_qty_kg - allocated, 3)},
-                    **ref))
+                    **seg_ref))
 
     # 逐耗核验
     per_use_failures: dict[str, list[dict]] = defaultdict(list)
@@ -672,37 +775,31 @@ def verify_consumables(payload: SubmissionPayload) -> dict:
         seg = info["segment"]
         st = stays.get(seg.stay_id) if seg else None
         bake = bakes.get(st.bake_id) if st else None
-        keys = {("batch", u.batch_id), ("segment", u.segment_id)}
-        if st:
-            keys.add(("stay", st.stay_id))
-        if bake:
-            keys.add(("bake", bake.bake_id))
         out = []
         at = info["used_at"]
         for f in failures:
             if f.get("scope"):
                 continue  # 消耗级失败已在 per_use_failures
             ids = f["ids"]
-            # 只按失败所属实体本体匹配：批次级问题传播到该批次全部消耗，
-            # 领用段级问题（如数量重复分配）只影响该段，不跨段扩散
-            own_match = (
-                (ids.get("batch_id") and ("batch", u.batch_id) in keys
-                 and not (ids.get("segment_id") or ids.get("stay_id")
-                          or ids.get("bake_id")))
-                or (ids.get("segment_id") and ("segment", u.segment_id) in keys)
-                or (ids.get("stay_id") and ("stay", ids.get("stay_id"))
-                    in keys and not ids.get("segment_id"))
-                or (ids.get("bake_id") and ("bake", ids.get("bake_id"))
-                    in keys and not (ids.get("stay_id")
-                                     or ids.get("segment_id")))
-            )
-            if not own_match:
+            # 按失败所属最具体实体，把 finding 的实体 id 与消耗实际挂接的
+            # 实体 id 做值比较——绝不与消耗自身实体集合比成员关系
+            # （否则段级问题会错误命中每一段；SG-01 超配不得错指 SG-03）：
+            # - 段级（数量守恒/段时序）只影响同 segment_id 的消耗；
+            # - 暂存级（保温筒校准/保温断档）只影响同 stay_id 的消耗；
+            # - 烘干级只影响同 bake_id 产出的消耗；
+            # - 批次级（质保书/入库/制度）才传播到该批次全部消耗。
+            if ids.get("segment_id"):
+                matched, hit = "segment", ids["segment_id"] == u.segment_id
+            elif ids.get("stay_id"):
+                matched, hit = "stay", st is not None and ids["stay_id"] == st.stay_id
+            elif ids.get("bake_id"):
+                matched, hit = "bake", bake is not None and ids["bake_id"] == bake.bake_id
+            elif ids.get("batch_id"):
+                matched, hit = "batch", ids["batch_id"] == u.batch_id
+            else:
                 continue
-            matched = "batch" if ids.get("batch_id") and not (
-                ids.get("segment_id") or ids.get("stay_id")
-                or ids.get("bake_id")) else (
-                "segment" if ids.get("segment_id")
-                else ("stay" if ids.get("stay_id") else "bake"))
+            if not hit:
+                continue
             # 烘箱校准失效按整个烘干周期传播（该烘焊材全部失效）；
             # 保温筒校准失效只影响到期点之后的消耗（到期前领用仍有效），
             # 与 NDE 设备跨到期点口径区分：焊材保温筒按取用时点核对。
@@ -747,11 +844,18 @@ def verify_consumables(payload: SubmissionPayload) -> dict:
                 events=events_by_segment.get(u.segment_id, []), at=at),
         }
 
+    completeness = _completeness(
+        payload=payload, batches=batches, rules=rules,
+        containers=containers, bakes=bakes, stays=stays, segments=segments,
+        resolved=resolved)
+
     return {
         "enabled": True,
         "use_states": use_states,
         "failures": failures,
         "chain_failures": [f for f in failures if not f.get("scope")],
+        "completeness": completeness,
+        "freeze_blocked": bool(completeness["gaps"]),
         "resolved": resolved,
         "indexes": {
             "batches": batches, "rules": rules, "containers": containers,

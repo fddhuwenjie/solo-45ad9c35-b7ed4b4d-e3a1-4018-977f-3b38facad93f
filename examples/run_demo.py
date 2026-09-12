@@ -15,6 +15,7 @@ from pathlib import Path
 from app.engine import evaluate
 from app.svg import render_weld_svg
 from examples.sample_data import (
+    consumable_failure_payload,
     direct_release_payload,
     double_repair_payload,
     extension_payload,
@@ -31,6 +32,8 @@ SCENARIOS = [
      lambda: double_repair_payload(second_covered=False)),
     ("4-ndt-resource", "夜班跨证书到期点/未校准设备（报告剔除 hold）",
      ndt_resource_failure_payload),
+    ("5-weld-material", "焊材保温校准失效/超时/数量重复分配（材料链 hold）",
+     consumable_failure_payload),
 ]
 
 
@@ -65,6 +68,20 @@ def main() -> None:
                 print(f"    {item['nde_id']} ({item['report_no']}) "
                       f"焊口 {item['weld_no']}  时段 {item['period']['started_at']} "
                       f"~ {item['period']['finished_at']}  原因: "
+                      f"{'、'.join(item['reasons'])}")
+        cons = result.get("consumables") or {}
+        if cons.get("enabled"):
+            print(f"  焊材链: 批次 {len(cons['batches'])} 烘干 "
+                  f"{len(cons['bake_cycles'])} 保温 {len(cons['quiver_stays'])} "
+                  f"领用段 {len(cons['segments'])} 消耗 "
+                  f"{result['stats']['consumable_uses_total']} "
+                  f"失效 {result['stats']['consumable_uses_invalid']}"
+                  f"{('  [冻结阻断:' + ','.join(sorted({g['kind'] for g in cons['completeness']['gaps']})) + ']') if cons.get('freeze_blocked') else ''}")
+            for item in cons["invalid_uses"]:
+                print(f"    失效消耗 {item['use_id']} 焊口 {item['weld_no']}"
+                      f"{('/返修' + item['repair_id']) if item['repair_id'] else ''} "
+                      f"批次 {item['batch_id']} 段 {item['segment_id']} "
+                      f"暴露 {item['exposure_minutes']}min 原因: "
                       f"{'、'.join(item['reasons'])}")
         for w in result["welds"]:
             if w["decision"] == "hold":
