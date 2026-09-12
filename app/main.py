@@ -92,6 +92,7 @@ def _pack(rec: dict) -> dict:
         "lot_summaries": result["lot_summaries"],
         "welds": result["welds"],
         "nde_resources": result.get("nde_resources", {}),
+        "consumables": result.get("consumables", {"enabled": False}),
         "findings": result["findings"],
         "clauses_triggered": result["clauses_triggered"],
     }
@@ -140,8 +141,8 @@ def preview(payload: SubmissionPayload) -> dict:
         "snapshot_sha256": "0" * 64,
         "evaluated_at": result["evaluated_at"],
         **{k: result[k] for k in
-           ("stats", "lot_summaries", "welds", "nde_resources", "findings",
-            "clauses_triggered")},
+           ("stats", "lot_summaries", "welds", "nde_resources", "consumables",
+            "findings", "clauses_triggered")},
     }
     return pack
 

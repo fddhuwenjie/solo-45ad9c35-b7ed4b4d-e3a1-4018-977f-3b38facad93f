@@ -9,12 +9,14 @@
 """
 from __future__ import annotations
 
+import json
 import math
 from collections import defaultdict
 from datetime import datetime, timezone
 
 from . import geometry as geo
 from .clauses import CLAUSES, Severity
+from .consumables import verify_consumables
 from .nde_resource import verify_nde_resource
 from .qualification import (
     match_welder,
@@ -34,7 +36,9 @@ MAX_REPAIRS = 2
 
 
 def _finding(code: str, *, weld_no=None, lot_id=None, nde_id=None,
-             repair_id=None, report_no=None, evidence=None) -> dict:
+             repair_id=None, report_no=None, evidence=None,
+             batch_id=None, segment_id=None, bake_id=None, stay_id=None,
+             use_id=None) -> dict:
     meta = CLAUSES[code]
     return {
         "code": code,
@@ -47,6 +51,11 @@ def _finding(code: str, *, weld_no=None, lot_id=None, nde_id=None,
         "nde_id": nde_id,
         "repair_id": repair_id,
         "report_no": report_no,
+        "batch_id": batch_id,
+        "segment_id": segment_id,
+        "bake_id": bake_id,
+        "stay_id": stay_id,
+        "use_id": use_id,
         "evidence": evidence or {},
     }
 
@@ -55,18 +64,54 @@ def _ceil_ratio(ratio: float, total: int) -> int:
     return max(1, math.ceil(ratio * total - 1e-9))
 
 
+def json_dumps_evidence(evidence) -> str:
+    return json.dumps(evidence or {}, ensure_ascii=False,
+                      sort_keys=True, default=str)
+
+
+def _wm_finding(fail: dict) -> dict:
+    """把焊材核验模块的消耗级 failure 转成引擎 finding（定位到焊口/返修）。"""
+    ids = fail.get("ids") or {}
+    return {
+        "code": fail["code"],
+        "severity": fail["severity"],
+        "category": fail["category"],
+        "reference": fail["reference"],
+        "message": fail["message"],
+        "weld_no": fail.get("weld_no"),
+        "lot_id": None,
+        "nde_id": None,
+        "repair_id": fail.get("repair_id"),
+        "report_no": None,
+        "batch_id": ids.get("batch_id"),
+        "segment_id": ids.get("segment_id"),
+        "bake_id": ids.get("bake_id"),
+        "stay_id": ids.get("stay_id"),
+        "use_id": ids.get("use_id"),
+        "evidence": fail.get("evidence") or {},
+    }
+
+
 # ================================================================ 返修/复检链
 
 
 def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
                            repairs: list[RepairRecord], wps_index, welder_index,
-                           nde_valid: dict[str, bool] | None = None):
+                           nde_valid: dict[str, bool] | None = None,
+                           repair_consumable_invalid: dict[str, bool] | None = None,
+                           repair_consumable_codes: dict[str, list[str]] | None = None,
+                           repair_consumable_links: dict[str, list[dict]] | None = None):
     """沿缺陷位置串接 原始不合格 -> 挖补 -> 复检，返回 (findings, links, closed)。
 
     资源核验未通过的检测记录（nde_valid[nde_id]=False）一律不参与串接：
     既不能作为不合格缺陷依据，也不能作为返修复检合格片。
+    repair_consumable_invalid[repair_id]=True 时该次返修焊材链不合规，
+    失效焊材不得用于返修闭合（RP-WM-INVALID）。
     """
     nde_valid = nde_valid or {}
+    repair_consumable_invalid = repair_consumable_invalid or {}
+    repair_consumable_codes = repair_consumable_codes or {}
+    repair_consumable_links = repair_consumable_links or {}
     findings: list[dict] = []
     links: list[dict] = []
 
@@ -221,6 +266,15 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
                 "RP-NO-WELDER", weld_no=weld.weld_no, repair_id=rep.repair_id,
                 evidence={"welder_id": rep.welder_id},
             ))
+
+        # 焊材链：返修补焊消耗的焊材必须合规；失效焊材不得用于返修闭合
+        if repair_consumable_invalid.get(rep.repair_id):
+            iter_blocking.append(_finding(
+                "RP-WM-INVALID", weld_no=weld.weld_no, repair_id=rep.repair_id,
+                evidence={"iteration": it,
+                          "wm_codes": repair_consumable_codes.get(
+                              rep.repair_id, [])},
+            ))
         findings.extend(iter_blocking)
 
         # --- 复检时序：同iteration、同方法的底片若早于/等于补焊，判次序倒置 ---
@@ -343,6 +397,7 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
             "approved": rep.approved and bool(rep.approved_by),
             "excavated_band": geo.band_dict(rep.excavated_band),
             "reinspections": reinspection_dicts,
+            "consumable_uses": repair_consumable_links.get(rep.repair_id, []),
             "closed": closed,
         })
 
@@ -590,7 +645,10 @@ def _lot_summary(lot_id, method, ratio, total, req_init, exam_init,
 
 def _evaluate_weld(weld: WeldRecord, payload: SubmissionPayload,
                    wps_index, welder_index,
-                   nde_valid: dict[str, bool] | None = None):
+                   nde_valid: dict[str, bool] | None = None,
+                   repair_consumable_invalid: dict[str, bool] | None = None,
+                   repair_consumable_codes: dict[str, list[str]] | None = None,
+                   repair_consumable_links: dict[str, list[dict]] | None = None):
     findings: list[dict] = []
 
     # 炉批：两个母材端都必须有炉批号；异径提示
@@ -636,7 +694,9 @@ def _evaluate_weld(weld: WeldRecord, payload: SubmissionPayload,
     # 抽样批中未抽中的焊口不应被判为"无检测"。
 
     chain_findings, links, _chain_closed = _evaluate_repair_chain(
-        weld, ndes, repairs, wps_index, welder_index, nde_valid
+        weld, ndes, repairs, wps_index, welder_index, nde_valid,
+        repair_consumable_invalid, repair_consumable_codes,
+        repair_consumable_links,
     )
     findings.extend(chain_findings)
 
@@ -698,11 +758,77 @@ def evaluate(payload: SubmissionPayload) -> dict:
             ))
 
     weld_results: dict[str, dict] = {}
+
+    # ---- 0b) 焊材批次与烘干/保温/领用链核验（链启用时整包逐耗判定）----
+    wm = verify_consumables(payload)
+    wm_findings_by_weld: dict[str, list[dict]] = defaultdict(list)
+    wm_chain_findings: list[dict] = []
+    repair_consumable_invalid: dict[str, bool] = {}
+    repair_consumable_codes: dict[str, list[str]] = defaultdict(list)
+    repair_consumable_links: dict[str, list[dict]] = defaultdict(list)
+    if wm["enabled"]:
+        # 消耗级失败：直接挂到归属焊口（返修消耗同时标 repair_id）
+        for fail in wm["failures"]:
+            finding = _wm_finding(fail)
+            if fail.get("scope"):
+                wm_findings_by_weld[fail["weld_no"]].append(finding)
+                if fail.get("repair_id"):
+                    repair_consumable_codes[fail["repair_id"]].append(
+                        fail["code"])
+            else:
+                wm_chain_findings.append(finding)
+        # 实体级（批次/烘干/暂存/领用段）失败传播到挂在其下的全部消耗：
+        # 由每耗 use_states 的 reasons 反推，逐焊口去重挂条款。
+        for state in wm["use_states"].values():
+            weld_no = state["weld_no"]
+            for code in state["reasons"]:
+                finding = _finding(
+                    code, weld_no=weld_no,
+                    repair_id=state["repair_id"],
+                    batch_id=state["batch_id"],
+                    segment_id=state["segment_id"],
+                    use_id=state["use_id"],
+                    evidence={"scope": state["scope"],
+                              "use_id": state["use_id"],
+                              "batch_id": state["batch_id"],
+                              "segment_id": state["segment_id"],
+                              "exposure_minutes": state.get("exposure_minutes"),
+                              "exposure_limit_minutes":
+                                  state.get("exposure_limit_minutes")},
+                )
+                wm_findings_by_weld[weld_no].append(finding)
+                if state["repair_id"]:
+                    repair_consumable_codes[state["repair_id"]].append(code)
+            if state["scope"] == "repair":
+                links = state["chain"]
+                repair_consumable_links[state["repair_id"]].append(links)
+                if not state["consumable_valid"]:
+                    repair_consumable_invalid[state["repair_id"]] = True
+
+    def _dedup_findings(items: list[dict]) -> list[dict]:
+        seen: set[tuple] = set()
+        out: list[dict] = []
+        for f in items:
+            key = (f["code"], f.get("nde_id"), f.get("repair_id"),
+                   f.get("use_id"), f.get("batch_id"), f.get("segment_id"),
+                   json_dumps_evidence(f.get("evidence")))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(f)
+        return out
+
     for weld in payload.welds:
         findings, links, ndes = _evaluate_weld(
-            weld, payload, wps_index, welder_index, nde_valid
+            weld, payload, wps_index, welder_index, nde_valid,
+            repair_consumable_invalid,
+            {k: sorted(set(v)) for k, v in repair_consumable_codes.items()},
+            dict(repair_consumable_links),
         )
         findings = resource_findings.get(weld.weld_no, []) + findings
+        if wm["enabled"]:
+            findings = wm_findings_by_weld.get(weld.weld_no, []) + findings
+        findings = _dedup_findings(findings)
         hold = any(f["severity"] == Severity.HOLD.value for f in findings)
         weld_results[weld.weld_no] = {
             "findings": findings,
@@ -734,6 +860,18 @@ def evaluate(payload: SubmissionPayload) -> dict:
     # 批次 hold 会连带焊口 hold，汇总最终焊口结论
     weld_verdicts: list[dict] = []
     all_findings: list[dict] = []
+
+    def _production_use_links(weld_no: str) -> list[dict]:
+        if not wm["enabled"]:
+            return []
+        return [s["chain"] | {"consumable_valid": s["consumable_valid"],
+                              "reasons": s["reasons"],
+                              "exposure_minutes": s.get("exposure_minutes"),
+                              "exposure_limit_minutes":
+                                  s.get("exposure_limit_minutes")}
+                for s in wm["use_states"].values()
+                if s["scope"] == "production" and s["weld_no"] == weld_no]
+
     for weld in payload.welds:
         base = weld_results[weld.weld_no]
         findings = base["findings"] + lot_per_weld.get(weld.weld_no, [])
@@ -783,13 +921,18 @@ def evaluate(payload: SubmissionPayload) -> dict:
             } for r in sorted(base["ndes"],
                               key=lambda r: (r.iteration, r.examined_at))],
             "repairs": base["links"],
+            "consumable_uses": _production_use_links(weld.weld_no),
             "decision": "hold" if hold else "release",
             "findings": findings,
         })
 
+    if wm["enabled"]:
+        all_findings.extend(wm_chain_findings)
     all_findings.sort(key=lambda f: (
         f.get("weld_no") or "~", f.get("lot_id") or "~",
         f["code"], f.get("nde_id") or "", f.get("repair_id") or "",
+        f.get("use_id") or "", f.get("batch_id") or "",
+        f.get("segment_id") or "",
     ))
 
     total = len(payload.welds)
@@ -820,6 +963,12 @@ def evaluate(payload: SubmissionPayload) -> dict:
             ),
             "nde_personnel_total": len(payload.nde_personnel),
             "nde_equipment_versions_total": len(payload.nde_equipment),
+            "consumable_chain_enabled": wm["enabled"],
+            "consumable_batches_total": len(payload.consumable_batches),
+            "consumable_uses_total": len(wm["use_states"]) if wm["enabled"] else 0,
+            "consumable_uses_invalid": sum(
+                1 for s in wm["use_states"].values()
+                if not s["consumable_valid"]) if wm["enabled"] else 0,
         },
         "nde_resources": {
             "personnel": [
@@ -865,7 +1014,62 @@ def evaluate(payload: SubmissionPayload) -> dict:
         },
         "lot_summaries": lot_summaries,
         "welds": weld_verdicts,
+        "consumables": _consumables_block(payload, wm),
         "findings": all_findings,
         "clauses_triggered": codes,
         "evaluated_at": datetime.now(timezone.utc),
+    }
+
+
+def _consumables_block(payload: SubmissionPayload, wm: dict) -> dict:
+    """焊材事件链目录与规则摘要（随审查包冻结）。"""
+    if not wm.get("enabled"):
+        return {"enabled": False}
+    idx = wm["indexes"]
+    invalid_uses = [
+        {
+            "use_id": s["use_id"],
+            "scope": s["scope"],
+            "weld_no": s["weld_no"],
+            "repair_id": s["repair_id"],
+            "iteration": s["iteration"],
+            "batch_id": s["batch_id"],
+            "segment_id": s["segment_id"],
+            "used_at": s["used_at"],
+            "qty_kg": s["qty_kg"],
+            "exposure_minutes": s.get("exposure_minutes"),
+            "exposure_limit_minutes": s.get("exposure_limit_minutes"),
+            "reasons": s["reasons"],
+        }
+        for s in sorted(wm["use_states"].values(), key=lambda s: s["use_id"])
+        if not s["consumable_valid"]
+    ]
+    return {
+        "enabled": True,
+        "batches": [b.model_dump(mode="json") for b in payload.consumable_batches],
+        "rules": [r.model_dump(mode="json") for r in payload.consumable_rules],
+        "containers": [c.model_dump(mode="json")
+                       for c in payload.consumable_containers],
+        "bake_cycles": [b.model_dump(mode="json") for b in payload.bake_cycles],
+        "quiver_stays": [s.model_dump(mode="json") for s in payload.quiver_stays],
+        "segments": [s.model_dump(mode="json")
+                     for s in payload.consumable_segments],
+        "events": [e.model_dump(mode="json")
+                   for e in payload.consumable_events],
+        "invalid_uses": invalid_uses,
+        "chain_findings": [
+            {
+                "code": f["code"],
+                "severity": f["severity"],
+                "category": f["category"],
+                "reference": f["reference"],
+                "message": f["message"],
+                "batch_id": f["ids"].get("batch_id"),
+                "segment_id": f["ids"].get("segment_id"),
+                "bake_id": f["ids"].get("bake_id"),
+                "stay_id": f["ids"].get("stay_id"),
+                "evidence": f.get("evidence") or {},
+            }
+            for f in wm.get("chain_failures", [])
+        ],
     }

@@ -109,6 +109,11 @@ class QualRange(UtcModel):
 class WpsRecord(QualRange):
     wps_no: str = Field(min_length=1)
     pqr_no: Optional[str] = None
+    consumable_classes: list[str] = Field(
+        default_factory=list,
+        description="WPS 规定的焊材分类号清单，如 ['E5015']（AWS A5.1/GB/T 5117 "
+                    "焊条分类号）；焊材链启用时实际消耗批次分类号必须落在此清单内",
+    )
 
 
 class WelderQual(QualRange):
@@ -217,6 +222,188 @@ class NdeEquipmentVersion(UtcModel):
         return self
 
 
+# ---------------------------------------------------------------- 焊材批次与烘干领用链
+#
+# 低氢焊条（GB/T 5117 E5015 类）事件链：
+#   批次(含质保书/入库验收/适用 WPS)
+#     → 烘干周期 BakeCycle（烘箱某校准版本内：装入→温度时序→取出）
+#       → 保温暂存 QuiverStay（保温筒某校准版本内：装入→温度时序→取出）
+#         → 领用段 IssueSegment（领出数量/时刻）
+#           → 施焊/返修消耗 ConsumableUse（每道焊口、每次返修逐根挂账）
+#           → 退回(再烘干)/报废 SegmentEvent（闭合领用数量）
+# 设备以 container_id + version 复合身份登记，重新校准/换测温探头派生新版本。
+
+ReceivedStatus = Literal["accepted", "quarantine", "rejected"]
+ContainerKind = Literal["oven", "quiver"]
+SegmentEventType = Literal["return", "scrap"]
+
+
+class ConsumableBatch(UtcModel):
+    """焊材批次：分类号（牌号类别）、制造批号、质保书、入库状态与适用 WPS。"""
+
+    batch_id: str = Field(min_length=1, description="焊材批次登记号，包内唯一")
+    classification: str = Field(
+        min_length=1,
+        description="焊材分类号，如 E5015（低氢碱性焊条），与 WPS 分类号清单核对",
+    )
+    designation: Optional[str] = Field(
+        default=None, description="商品牌号（备查），如 J507"
+    )
+    manufacturer: Optional[str] = Field(default=None, description="制造厂（备查）")
+    manufacturer_lot_no: str = Field(min_length=1, description="制造厂批号（炉批号）")
+    cert_no: Optional[str] = Field(default=None, description="质量证明书（质保书）编号")
+    cert_lot_no: Optional[str] = Field(
+        default=None, description="质保书记载批号；须与制造批号一致"
+    )
+    received_status: ReceivedStatus = Field(
+        default="accepted", description="入库状态：accepted=验收合格/quarantine=待检/rejected=拒收"
+    )
+    received_qty_kg: float = Field(gt=0, description="入库数量(kg)")
+    applicable_wps: list[str] = Field(
+        default_factory=list, description="该批次适用的 WPS 编号清单"
+    )
+
+
+class ConsumableRule(UtcModel):
+    """按焊材分类号规定的烘干/保温/暴露制度。"""
+
+    classification: str = Field(min_length=1, description="焊材分类号，包内唯一")
+    bake_temp_min_c: float = Field(description="烘干恒温温度下限(℃)，如 350")
+    bake_temp_max_c: float = Field(description="烘干恒温温度上限(℃)，如 400")
+    min_soak_minutes: float = Field(gt=0, description="烘干窗口内最短恒温时长(分钟)")
+    holding_temp_min_c: float = Field(description="保温筒温度下限(℃)，如 100")
+    holding_temp_max_c: float = Field(description="保温筒温度上限(℃)，如 150")
+    max_exposure_minutes: float = Field(
+        gt=0, description="领出保温筒后单次最大暴露时长(分钟)，默认 240（4 小时）"
+    )
+    max_bake_cycles: int = Field(
+        default=2, ge=1,
+        description="允许烘干周期序号上限（默认 2：首次烘干 + 至多 1 次返烘）",
+    )
+    max_transfer_minutes: float = Field(
+        default=15.0, gt=0,
+        description="烘箱取出到装入保温筒的最大允许间隔(分钟)，超期即保温断档",
+    )
+    max_log_gap_minutes: float = Field(
+        default=180.0, gt=0,
+        description="烘箱/保温筒温度时序相邻读数最大间隔(分钟)，超出视为记录断档",
+    )
+
+    @model_validator(mode="after")
+    def _check_rule(self) -> "ConsumableRule":
+        if self.bake_temp_max_c < self.bake_temp_min_c:
+            raise ValueError("bake_temp_max_c 不得小于 bake_temp_min_c")
+        if self.holding_temp_max_c < self.holding_temp_min_c:
+            raise ValueError("holding_temp_max_c 不得小于 holding_temp_min_c")
+        return self
+
+
+class ConsumableContainerVersion(UtcModel):
+    """烘箱(oven)/保温筒(quiver) 的一个校准配置版本（测温/控温装置校准）。"""
+
+    container_id: str = Field(min_length=1, description="设备编号（同机跨版本稳定）")
+    version: str = Field(min_length=1, description="校准版本号，同机唯一")
+    name: str = Field(min_length=1)
+    kind: ContainerKind
+    serial_no: str = Field(min_length=1)
+    calibrated_from: datetime
+    calibrated_to: datetime
+
+    @model_validator(mode="after")
+    def _check_window(self) -> "ConsumableContainerVersion":
+        if _as_utc(self.calibrated_to) <= _as_utc(self.calibrated_from):
+            raise ValueError("calibrated_to 必须晚于 calibrated_from")
+        return self
+
+
+class TemperatureReading(UtcModel):
+    """烘箱/保温筒温度时序上的一个读数点。"""
+
+    at: datetime
+    temp_c: float = Field(ge=0)
+
+
+class BakeCycle(UtcModel):
+    """一次烘干周期：同一批次在烘箱内 装入→恒温→取出，cycle_no 为第几烘。"""
+
+    bake_id: str = Field(min_length=1)
+    batch_id: str = Field(min_length=1)
+    cycle_no: int = Field(ge=1, description="烘干序号：1=首次烘干，2=返烘一次")
+    oven_id: str
+    oven_version: str
+    loaded_at: datetime = Field(description="装入烘箱时刻")
+    unloaded_at: datetime = Field(description="取出烘箱时刻")
+    loaded_qty_kg: float = Field(gt=0, description="本周期装入数量(kg)")
+    readings: list[TemperatureReading] = Field(
+        default_factory=list, description="烘箱温度时序（须持续覆盖烘干时段）"
+    )
+
+    @model_validator(mode="after")
+    def _check_order(self) -> "BakeCycle":
+        if _as_utc(self.unloaded_at) <= _as_utc(self.loaded_at):
+            raise ValueError("unloaded_at 必须晚于 loaded_at")
+        return self
+
+
+class QuiverStay(UtcModel):
+    """烘干后在保温筒内的一段连续暂存；领用段必须挂在暂存区间内。"""
+
+    stay_id: str = Field(min_length=1)
+    batch_id: str = Field(min_length=1)
+    bake_id: str = Field(description="来源烘干周期（烘箱→保温筒交接）")
+    quiver_id: str
+    quiver_version: str
+    loaded_at: datetime = Field(description="装入保温筒时刻（须紧随烘箱取出）")
+    unloaded_at: Optional[datetime] = Field(
+        default=None, description="整段暂存结束时刻；仍在筒内可留空"
+    )
+    loaded_qty_kg: float = Field(gt=0, description="装入保温筒数量(kg)")
+    readings: list[TemperatureReading] = Field(
+        default_factory=list, description="保温筒温度时序（须持续覆盖暂存时段）"
+    )
+
+    @model_validator(mode="after")
+    def _check_order(self) -> "QuiverStay":
+        if self.unloaded_at is not None and \
+                _as_utc(self.unloaded_at) <= _as_utc(self.loaded_at):
+            raise ValueError("unloaded_at 必须晚于 loaded_at")
+        return self
+
+
+class ConsumableIssueSegment(UtcModel):
+    """一次领用段：自保温暂存领出的数量与时刻，消耗/退回/报废均挂在其下。"""
+
+    segment_id: str = Field(min_length=1)
+    batch_id: str = Field(min_length=1)
+    stay_id: str = Field(description="领出自哪段保温暂存")
+    issued_at: datetime
+    issued_qty_kg: float = Field(gt=0)
+    issued_to: Optional[str] = Field(default=None, description="领用人（备查）")
+
+
+class ConsumableSegmentEvent(UtcModel):
+    """领用段上的退回(return)/报废(scrap)事件，参与领用数量闭合。"""
+
+    event_id: str = Field(min_length=1)
+    segment_id: str
+    event_type: SegmentEventType
+    at: datetime
+    qty_kg: float = Field(gt=0)
+
+
+class ConsumableUse(UtcModel):
+    """一次实际消耗：焊口施焊或返修补焊实际使用的批次与领用段及数量。
+
+    used_at 缺省时由引擎按施焊时刻(welded_at)/补焊时刻(repaired_at) 代入。
+    """
+
+    use_id: str = Field(min_length=1)
+    batch_id: str
+    segment_id: str
+    qty_kg: float = Field(gt=0)
+    used_at: Optional[datetime] = None
+
+
 # ---------------------------------------------------------------- 焊口本体
 
 
@@ -235,6 +422,10 @@ class WeldRecord(UtcModel):
     product: str = Field(
         default="pressure_pipe",
         description="产品类别，与 NDT 人员证书 products 认可范围核对（默认承压管道）",
+    )
+    consumables: list[ConsumableUse] = Field(
+        default_factory=list,
+        description="施焊实际消耗的焊材批次与领用段（焊材链启用时逐道焊口必填）",
     )
 
 
@@ -320,6 +511,10 @@ class RepairRecord(UtcModel):
     wps_no: str
     approved: bool = False
     approved_by: Optional[str] = None
+    consumables: list[ConsumableUse] = Field(
+        default_factory=list,
+        description="补焊实际消耗的焊材批次与领用段；失效焊材不得用于返修闭合",
+    )
 
 
 class LotRule(UtcModel):
@@ -346,6 +541,23 @@ class SubmissionPayload(UtcModel):
         default_factory=list,
         description="无损检测设备版本登记（equipment_id+version 唯一）",
     )
+    consumable_batches: list[ConsumableBatch] = Field(
+        default_factory=list,
+        description="焊材批次登记（分类号/制造批号/质保书/入库状态/适用 WPS）；"
+                    "非空即视为本包启用焊材链，逐道焊口与返修均须挂实际消耗",
+    )
+    consumable_rules: list[ConsumableRule] = Field(
+        default_factory=list,
+        description="按分类号规定的烘干/保温/暴露/重复烘干制度",
+    )
+    consumable_containers: list[ConsumableContainerVersion] = Field(
+        default_factory=list,
+        description="烘箱/保温筒校准版本登记（container_id+version 唯一）",
+    )
+    bake_cycles: list[BakeCycle] = Field(default_factory=list)
+    quiver_stays: list[QuiverStay] = Field(default_factory=list)
+    consumable_segments: list[ConsumableIssueSegment] = Field(default_factory=list)
+    consumable_events: list[ConsumableSegmentEvent] = Field(default_factory=list)
     welds: list[WeldRecord] = Field(min_length=1)
     nde: list[NdeRecord] = Field(default_factory=list)
     repairs: list[RepairRecord] = Field(default_factory=list)
@@ -375,6 +587,33 @@ class SubmissionPayload(UtcModel):
         if len(set(equip_keys)) != len(equip_keys):
             dupes = sorted({k for k in equip_keys if equip_keys.count(k) > 1})
             errors.append(f"NDT 设备版本标识重复 (equipment_id,version): {dupes}")
+
+        # ---- 焊材链身份唯一（引用缺失不在此拒绝，沿用引擎挂条款口径）----
+        def _dupe_ids(items, label: str, attr: str = None):
+            ids = [getattr(i, attr) if attr else i for i in items]
+            if len(set(ids)) != len(ids):
+                dupes = sorted({n for n in ids if ids.count(n) > 1})
+                errors.append(f"{label}重复: {dupes}")
+
+        _dupe_ids(self.consumable_batches, "焊材批次编号", "batch_id")
+        _dupe_ids(self.consumable_rules, "焊材烘干制度分类号", "classification")
+        cc_keys = [(c.container_id, c.version) for c in self.consumable_containers]
+        if len(set(cc_keys)) != len(cc_keys):
+            dupes = sorted({k for k in cc_keys if cc_keys.count(k) > 1})
+            errors.append(f"烘箱/保温筒校准版本标识重复 (container_id,version): {dupes}")
+        _dupe_ids(self.bake_cycles, "烘干周期编号", "bake_id")
+        _dupe_ids(self.quiver_stays, "保温暂存编号", "stay_id")
+        _dupe_ids(self.consumable_segments, "焊材领用段编号", "segment_id")
+        _dupe_ids(self.consumable_events, "领用段事件编号", "event_id")
+        # 同一批次的烘干序号不得重复
+        bake_keys = [(b.batch_id, b.cycle_no) for b in self.bake_cycles]
+        if len(set(bake_keys)) != len(bake_keys):
+            dupes = sorted({k for k in bake_keys if bake_keys.count(k) > 1})
+            errors.append(f"同批次烘干周期序号重复 (batch_id,cycle_no): {dupes}")
+        # 消耗编号在焊口+返修范围内全局唯一
+        use_ids = [u.use_id for w in self.welds for u in w.consumables]
+        use_ids += [u.use_id for r in self.repairs for u in r.consumables]
+        _dupe_ids(use_ids, "焊材消耗记录编号")
 
         for w in self.welds:
             if w.wps_no not in wps_set:
@@ -430,6 +669,11 @@ class Finding(BaseModel):
     nde_id: Optional[str] = None
     repair_id: Optional[str] = None
     report_no: Optional[str] = None
+    batch_id: Optional[str] = None
+    segment_id: Optional[str] = None
+    bake_id: Optional[str] = None
+    stay_id: Optional[str] = None
+    use_id: Optional[str] = None
     evidence: dict = Field(default_factory=dict)
 
 
@@ -442,6 +686,7 @@ class RepairLink(BaseModel):
     approved: bool
     excavated_band: dict
     reinspections: list[dict] = Field(default_factory=list)
+    consumable_uses: list[dict] = Field(default_factory=list)
     closed: bool
 
 
@@ -457,6 +702,10 @@ class WeldVerdict(BaseModel):
     nde_count: int
     nde: list[dict] = Field(default_factory=list)
     repairs: list[RepairLink] = Field(default_factory=list)
+    consumable_uses: list[dict] = Field(
+        default_factory=list,
+        description="施焊/返修实际消耗的焊材批次、领用段与事件链判定摘要",
+    )
     decision: Decision
     findings: list[Finding] = Field(default_factory=list)
     svg_url: Optional[str] = None
@@ -503,6 +752,11 @@ class ReviewPack(BaseModel):
     nde_resources: dict = Field(
         default_factory=dict,
         description="人员证书/设备版本登记目录与被剔除报告清单（资源版本+失效原因）",
+    )
+    consumables: dict = Field(
+        default_factory=dict,
+        description="焊材批次/制度/烘箱保温筒版本/烘干/保温/领用段事件链目录"
+                    "与失效消耗清单（规则摘要）",
     )
     findings: list[Finding] = Field(default_factory=list)
     clauses_triggered: list[str] = Field(default_factory=list)
@@ -587,3 +841,43 @@ class DiffReport(BaseModel):
     old_decision: Optional[str] = None
     new_decision: Optional[str] = None
     evaluation: Optional[NdeEvaluation] = None
+    consumable_evaluation: Optional["WmConsumableEvaluation"] = None
+
+
+class WmUseState(BaseModel):
+    """单次焊材消耗在一个版本下的事件链核验状态（供版本差异呈现）。"""
+
+    use_id: str
+    weld_no: str
+    scope: str = Field(description="production=施焊消耗，repair=返修消耗")
+    repair_id: Optional[str] = None
+    iteration: Optional[int] = None
+    batch_id: Optional[str] = None
+    segment_id: Optional[str] = None
+    qty_kg: Optional[float] = None
+    consumable_valid: bool
+    reasons: list[str] = Field(default_factory=list)
+    chain: dict = Field(default_factory=dict)
+
+
+class WmConsumableEvaluation(BaseModel):
+    """两版审查结论中焊材批次与烘干领用链核验状态的结构化对比。"""
+
+    old_decision: Optional[str] = None
+    new_decision: Optional[str] = None
+    old_codes: list[str] = Field(default_factory=list)
+    new_codes: list[str] = Field(default_factory=list)
+    resolved: list[str] = Field(
+        default_factory=list,
+        description="新版不再触发的 WM 条款（补录温度记录/重新校准后消除）",
+    )
+    introduced: list[str] = Field(
+        default_factory=list,
+        description="新版新触发的 WM 条款",
+    )
+    old_invalid_uses: list[WmUseState] = Field(default_factory=list)
+    new_invalid_uses: list[WmUseState] = Field(default_factory=list)
+    changed_uses: list[dict] = Field(
+        default_factory=list,
+        description="事件链核验状态发生变化的消耗（含批次、领用段、失效定位）",
+    )

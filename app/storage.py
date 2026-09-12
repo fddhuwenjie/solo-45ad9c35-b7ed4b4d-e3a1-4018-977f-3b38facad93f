@@ -55,6 +55,14 @@ KEY_FIELDS = {
     "nde_personnel": "cert_no",
     # 设备版本身份是 (equipment_id, version)：同序列号换探头/重新校准派生新版本
     "nde_equipment": ("equipment_id", "version"),
+    # 焊材链：烘箱/保温筒同样以 (container_id, version) 复合身份进入版本差异
+    "consumable_batches": "batch_id",
+    "consumable_rules": "classification",
+    "consumable_containers": ("container_id", "version"),
+    "bake_cycles": "bake_id",
+    "quiver_stays": "stay_id",
+    "consumable_segments": "segment_id",
+    "consumable_events": "event_id",
     "welds": "weld_no",
     "nde": "nde_id",
     "repairs": "repair_id",
@@ -444,6 +452,98 @@ def _nde_evaluation(old_pkg: dict, new_pkg: dict) -> dict:
     }
 
 
+def _wm_use_states(pkg: dict) -> dict[str, dict]:
+    """从冻结评估结果抽取每次焊材消耗的事件链核验状态（供版本差异呈现）。"""
+    result = pkg.get("result", {})
+    states: dict[str, dict] = {}
+    if not result.get("consumables", {}).get("enabled"):
+        return states
+    for w in result.get("welds", []):
+        # 施焊消耗在焊口级 consumable_uses（chain 摘要形态）
+        for u in w.get("consumable_uses", []):
+            states[u["chain"]["use_id"]] = {
+                "use_id": u["chain"]["use_id"],
+                "weld_no": w["weld_no"],
+                "scope": "production",
+                "repair_id": None,
+                "iteration": None,
+                "batch_id": u["chain"].get("batch", {}).get("batch_id")
+                if u["chain"].get("batch") else None,
+                "segment_id": u["chain"].get("segment", {}).get("segment_id")
+                if u["chain"].get("segment") else None,
+                "qty_kg": u["chain"].get("qty_kg"),
+                "consumable_valid": bool(u.get("consumable_valid", True)),
+                "reasons": list(u.get("reasons", [])),
+                "chain": u.get("chain", {}),
+            }
+        # 返修消耗在返修链节内
+        for link in w.get("repairs", []):
+            for u in link.get("consumable_uses", []):
+                states[u["use_id"]] = {
+                    "use_id": u["use_id"],
+                    "weld_no": w["weld_no"],
+                    "scope": "repair",
+                    "repair_id": link["repair_id"],
+                    "iteration": link["iteration"],
+                    "batch_id": (u.get("batch") or {}).get("batch_id"),
+                    "segment_id": (u.get("segment") or {}).get("segment_id"),
+                    "qty_kg": u.get("qty_kg"),
+                    "consumable_valid": bool(u.get("consumable_valid", True)),
+                    "reasons": list(u.get("reasons", [])),
+                    "chain": u,
+                }
+    return states
+
+
+def _wm_evaluation(old_pkg: dict, new_pkg: dict) -> Optional[dict]:
+    """对比两版焊材链核验结论：保留旧版失效消耗并呈现批次/领用段状态变化。
+
+    预演、版本差异与 JSON 审查包共用同一判定，故两侧均未启用焊材链时返回 None。
+    """
+    old_cons = old_pkg.get("result", {}).get("consumables", {})
+    new_cons = new_pkg.get("result", {}).get("consumables", {})
+    if not old_cons.get("enabled") and not new_cons.get("enabled"):
+        return None
+    old_result, new_result = old_pkg["result"], new_pkg["result"]
+    old_codes = [c for c in old_result.get("clauses_triggered", [])
+                 if c.startswith("WM-") or c == "RP-WM-INVALID"]
+    new_codes = [c for c in new_result.get("clauses_triggered", [])
+                 if c.startswith("WM-") or c == "RP-WM-INVALID"]
+    old_states = _wm_use_states(old_pkg)
+    new_states = _wm_use_states(new_pkg)
+
+    changed: list[dict] = []
+    for use_id in sorted(set(old_states) | set(new_states)):
+        o, n = old_states.get(use_id), new_states.get(use_id)
+        ov = o["consumable_valid"] if o else None
+        nv = n["consumable_valid"] if n else None
+        if ov == nv:
+            continue
+        changed.append({
+            "use_id": use_id,
+            "change": "valid_to_invalid" if ov and not nv
+            else ("invalid_to_valid" if not ov and nv else "presence_changed"),
+            "old": o, "new": n,
+        })
+
+    def _invalid(states: dict[str, dict]) -> list[dict]:
+        return [{k: v for k, v in s.items() if k != "chain"}
+                for s in sorted(states.values(), key=lambda s: s["use_id"])
+                if not s["consumable_valid"]]
+
+    return {
+        "old_decision": old_result.get("decision"),
+        "new_decision": new_result.get("decision"),
+        "old_codes": sorted(old_codes),
+        "new_codes": sorted(new_codes),
+        "resolved": sorted(set(old_codes) - set(new_codes)),
+        "introduced": sorted(set(new_codes) - set(old_codes)),
+        "old_invalid_uses": _invalid(old_states),
+        "new_invalid_uses": _invalid(new_states),
+        "changed_uses": changed,
+    }
+
+
 def diff_versions(old_pkg: dict, new_pkg: dict) -> dict:
     changes = diff_snapshots(old_pkg["snapshot"], new_pkg["snapshot"])
     return {
@@ -455,4 +555,5 @@ def diff_versions(old_pkg: dict, new_pkg: dict) -> dict:
         "old_decision": old_pkg["decision"],
         "new_decision": new_pkg["decision"],
         "evaluation": _nde_evaluation(old_pkg, new_pkg),
+        "consumable_evaluation": _wm_evaluation(old_pkg, new_pkg),
     }

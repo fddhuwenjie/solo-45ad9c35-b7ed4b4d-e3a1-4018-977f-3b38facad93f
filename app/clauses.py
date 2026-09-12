@@ -9,6 +9,7 @@
 - LT 系列：检验批抽检比例与扩检。
 - RP 系列：返修、复检与沿缺陷位置的串接。
 - NR 系列：无损检测资源核验（人员证书、设备版本按整个实施时段持续有效）。
+- WM 系列：焊材批次、烘干/保温/领用链（Welding Material）。
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ class ClauseCategory(str, Enum):
     LOT = "lot"
     REPAIR = "repair"
     RECORD = "record"
+    CONSUMABLE = "consumable"
 
 
 # 条款目录。键即 finding.code 引用的稳定编号。
@@ -318,6 +320,169 @@ CLAUSES: dict[str, dict[str, str]] = {
         "reference": "质量记录可追溯：缺陷发现 → 挖补补焊 → 复检的先后次序必须成立",
         "message": "返修时序倒置或缺少在先不合格依据"
                    "（补焊早于不合格底片、复检早于补焊，或无缺陷显示即返修）",
+    },
+    "RP-WM-INVALID": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.REPAIR.value,
+        "reference": "GB 50236 / GB/T 20801：返修补焊所用焊材必须合规；"
+                     "超时、断档、校准失效或已报废焊材不得用于返修闭合",
+        "message": "返修补焊消耗的焊材未通过批次/烘干/保温/领用链核验，"
+                   "失效焊材不得用于返修闭合（具体 WM 条款随附）",
+    },
+    # ---- 焊材批次与烘干/保温/领用链（WM 系列）----
+    # 低氢焊条（GB/T 5117 E5015 类）出厂后经"入库验收 → 烘干 → 保温筒暂存 →
+    # 领出 → 施焊/退回/报废"流转；任一环节断档、超时、数量对不上，
+    # 合格底片也不能证明施焊材料合规，相关焊口保持 hold。
+    "WM-CONSUMABLE-UNTRACED": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236 / GB/T 20801：焊条、焊丝应有可追溯的批号、"
+                     "烘干与领用记录，做到随用随领、账物相符",
+        "message": "施焊/补焊未引用实际消耗的焊材批次与领用段"
+                   "（焊材链已启用时不得出现无出处焊材）",
+    },
+    "WM-BATCH-NOT-RECEIVED": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236：焊材须经验收合格入库后方可发放使用",
+        "message": "焊材批次未经验收合格入库（received_status 非 accepted），不得领用",
+    },
+    "WM-CERT-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB/T 20801 / 质量体系：焊材质量证明书（质保书）应随批可查",
+        "message": "焊材批次缺质保书，或质保书批号与制造批号不一致",
+    },
+    "WM-WPS-CLASS-MISMATCH": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236 / NB/T 47014：WPS 规定的焊材分类号（牌号类别）"
+                     "应与实际使用焊材一致",
+        "message": "实际消耗焊材分类号不在该 WPS 规定的焊材分类号清单内（牌号拿错）",
+    },
+    "WM-BATCH-WPS-NOT-APPLICABLE": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "质量体系：焊材批次登记的适用 WPS 范围应覆盖实际 WPS",
+        "message": "焊材批次未登记适用于施焊/返修所用 WPS",
+    },
+    "WM-RULE-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236：焊条烘干温度、保温时间与重复烘干次数应在"
+                     "烘干制度中事先规定",
+        "message": "焊材分类号未登记烘干制度（烘干温度/时长/暴露时限/重复次数无据可核）",
+    },
+    "WM-CONTAINER-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "质量记录完整性：烘干/保温记录应可追溯所用烘箱、保温筒的"
+                     "具体校准版本",
+        "message": "烘干周期或保温暂存引用的烘箱/保温筒校准版本未登记（引用缺失）",
+    },
+    "WM-CONTAINER-KIND": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236：焊条烘干应在烘干箱内进行，领出后应置于通电保温筒",
+        "message": "设备用途不匹配（烘干记录挂在保温筒上，或保温记录挂在烘箱上）",
+    },
+    "WM-CONTAINER-CALIBRATION": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "计量体系：烘箱、保温筒的测温/控温装置应在校准有效期内使用；"
+                     "跨到期点的时段不得整体采信",
+        "message": "烘箱/保温筒校准有效期未持续覆盖使用时段（含跨到期点）",
+    },
+    "WM-BAKE-TEMP": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236 / 焊材说明书：低氢焊条烘干升温与恒温温度应符合"
+                     "烘干制度（如 350~400℃），温度时序须持续在窗口内",
+        "message": "烘干温度时序存在越限读数（低于烘干下限或高于上限），该烘干周期无效",
+    },
+    "WM-BAKE-DURATION": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236：焊条在规定烘干温度下的恒温时间不得短于烘干制度",
+        "message": "规定烘干温度窗口内的恒温时长不足（保温时间不够即取出）",
+    },
+    "WM-REBAKE-EXCEEDED": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236：低氢焊条重复烘干次数不宜超过规定（默认最多 1 次返烘，"
+                     "即烘干周期序号不得大于烘干制度上限）",
+        "message": "焊材重复烘干次数超过烘干制度允许上限（反复烘干判废，不得再领出）",
+    },
+    "WM-HOLDING-GAP": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236：烘干后焊条应保存在 100~150℃ 保温筒内随用随取；"
+                     "烘干→保温→领出的时序与交接时点必须连续",
+        "message": "保温连续性断档：烘干取出到保温装入超时限、使用/领用落在保温"
+                   "暂存区间之外，或温度时序存在未覆盖缺口",
+    },
+    "WM-HOLDING-TEMP": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236：保温筒温度应维持在烘干制度规定的保温温度窗口内",
+        "message": "保温筒温度时序存在越限读数（低于保温下限即等同暴露吸潮）",
+    },
+    "WM-EXPOSURE-EXCEEDED": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236：低氢焊条在大气中暴露时间不得超过规定"
+                     "（默认单次领用暴露上限 4 小时），超时应退回重新烘干或报废",
+        "message": "焊材自保温筒领出后的暴露时长超过烘干制度规定的最大暴露时长，"
+                   "仍继续用于施焊",
+    },
+    "WM-SEGMENT-ORDER": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "质量记录可追溯：领用 → 施焊消耗 → 退回/报废的先后次序必须成立",
+        "message": "领用段时序倒置（退回/报废早于领用、施焊发生在退回之后）",
+    },
+    "WM-SEGMENT-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "质量记录完整性：每道焊口/返修应能定位到具体的焊材领用段",
+        "message": "消耗记录引用的领用段未登记（领用单/保温筒事件缺失，无法定位出处）",
+    },
+    "WM-CHAIN-GAP": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "质量记录完整性：批号 → 烘干 → 保温 → 领用 → 退回/报废"
+                     "事件链应连续闭合",
+        "message": "焊材事件链断档：批次未烘干/未入保温即被领用，或领用段未挂接"
+                   "在任何保温暂存事件下",
+    },
+    "WM-QTY-CONSERVATION": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "质量体系：焊材发放、回收、报废数量应与消耗相符（账物相符），"
+                     "同一数量不得重复分配",
+        "message": "数量守恒失败：领用段的消耗+退回+报废数量超出领出数量"
+                   "（同一数量被重复分配）",
+    },
+    "WM-QTY-OPEN": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "质量体系：领用焊材未消耗部分应办理退库或报废，领用单必须闭合",
+        "message": "领用段未闭合：领出数量与消耗+退回+报废不符且无退回/报废事件",
+    },
+    "WM-QTY-LIMIT": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "质量体系：烘干/保温容量与发放数量应一致，装入数量不得"
+                     "凭空放大",
+        "message": "数量守恒失败：领用累计超出保温装入数量，或保温装入超出烘干"
+                   "出箱数量",
+    },
+    "WM-SCRAP-EXCESS": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.CONSUMABLE.value,
+        "reference": "GB 50236：超过暴露时限或返烘次数的焊条应报废，报废数量"
+                     "不得超出该领用段可处置数量",
+        "message": "报废数量超出领用段内可处置数量（报废事件与领用数量对不上）",
     },
 }
 

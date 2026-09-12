@@ -11,14 +11,23 @@ from datetime import datetime, timezone
 
 from app.schemas import (
     AngleBand,
+    BakeCycle,
+    ConsumableBatch,
+    ConsumableContainerVersion,
+    ConsumableIssueSegment,
+    ConsumableRule,
+    ConsumableSegmentEvent,
+    ConsumableUse,
     HeatEnd,
     LotRule,
     NdeEquipmentUse,
     NdeEquipmentVersion,
     NdePersonnelCert,
     NdeRecord,
+    QuiverStay,
     RepairRecord,
     SubmissionPayload,
+    TemperatureReading,
     WelderQual,
     WeldRecord,
     WpsRecord,
@@ -92,7 +101,8 @@ def default_rt_uses():
 
 def wps(no: str = "WPS-101", groups=("Fe-1",), tmin=3.0, tmax=20.0,
         dmin=25.0, dmax=600.0, processes=("GTAW", "SMAW"),
-        positions=("5G", "6G"), supported=True):
+        positions=("5G", "6G"), supported=True,
+        consumable_classes=("E5015",)):
     return WpsRecord(
         wps_no=no,
         pqr_no="PQR-101",
@@ -106,6 +116,7 @@ def wps(no: str = "WPS-101", groups=("Fe-1",), tmin=3.0, tmax=20.0,
         processes=list(processes),
         positions=list(positions),
         supported_by_pqr=supported,
+        consumable_classes=list(consumable_classes),
     )
 
 
@@ -234,6 +245,184 @@ def lot(rule_id="LOT-A", ratio=0.2, on_reject="double", double_step=0.2,
     )
 
 
+# ============================================================ 焊材批次与烘干领用链
+#
+# 低氢碱性焊条 E5015（J507）：2/28 早 5:00 入烘箱 350~400℃ 恒温 1h，
+# 5 分钟内转入 100~150℃ 保温筒；每个施工日 08:00 开一段领用，
+# 焊口/返修挂实际消耗，18:00 退回余量闭合数量。暴露上限 4h
+# （焊口 09:00、补焊 10:00，均在限内）。温度读数每 2h 一条（缺口限 3h）。
+
+
+def consumable_rule(classification="E5015", **kw):
+    defaults = dict(
+        classification=classification,
+        bake_temp_min_c=350.0, bake_temp_max_c=400.0,
+        min_soak_minutes=60.0,
+        holding_temp_min_c=100.0, holding_temp_max_c=150.0,
+        max_exposure_minutes=240.0,
+        max_bake_cycles=2, max_transfer_minutes=15.0,
+        max_log_gap_minutes=180.0,
+    )
+    defaults.update(kw)
+    return ConsumableRule(**defaults)
+
+
+def consumable_batch(batch_id="WM-E5015-2602", classification="E5015",
+                     lot_no="LOT-J507-260201", received_qty=50.0,
+                     applicable=("WPS-101",), **kw):
+    return ConsumableBatch(
+        batch_id=batch_id,
+        classification=classification,
+        designation=kw.get("designation", "J507"),
+        manufacturer=kw.get("manufacturer", "某焊材厂"),
+        manufacturer_lot_no=lot_no,
+        cert_no=kw.get("cert_no", f"MTC-{lot_no}"),
+        cert_lot_no=kw.get("cert_lot_no", lot_no),
+        received_status=kw.get("received_status", "accepted"),
+        received_qty_kg=received_qty,
+        applicable_wps=list(applicable),
+    )
+
+
+def consumable_containers():
+    """烘箱 OV-1 与保温筒 QV-1，校准覆盖 2026 全年。"""
+    return [
+        ConsumableContainerVersion(
+            container_id="OV-1", version="2026A", name="电焊条烘干箱",
+            kind="oven", serial_no="SN-OV-1",
+            calibrated_from="2026-01-01T00:00:00Z",
+            calibrated_to="2026-12-31T23:59:59Z"),
+        ConsumableContainerVersion(
+            container_id="QV-1", version="2026A", name="焊工保温筒",
+            kind="quiver", serial_no="SN-QV-1",
+            calibrated_from="2026-01-01T00:00:00Z",
+            calibrated_to="2026-12-31T23:59:59Z"),
+    ]
+
+
+def _readings(start, end, *, hours_step, temp):
+    from datetime import datetime as _dt, timedelta as _td
+    out = []
+    t = start
+    while t <= end:
+        out.append(TemperatureReading(at=t, temp_c=temp))
+        t = t + _td(hours=hours_step)
+    if out[-1].at < end:
+        out.append(TemperatureReading(at=end, temp_c=temp))
+    return out
+
+
+def valid_consumable_chain(welds, repairs=(), *, batch_id="WM-E5015-2602",
+                           rule=None, batch=None, containers=None,
+                           use_qty_weld=0.2, use_qty_repair=0.1,
+                           issue_weld_uses: dict | None = None):
+    """按焊口/返修的日期自动构造一条合规焊材链。
+
+    返回 dict(batches, rules, containers, bake_cycles, quiver_stays,
+              segments, events) 及已挂到 welds/repairs 上的消耗。
+    issue_weld_uses: 可选 {weld_no: qty} 覆盖逐口消耗量。
+    """
+    from datetime import datetime as _dt, timedelta as _td
+
+    rule = rule or consumable_rule()
+    batch = batch or consumable_batch(batch_id=batch_id,
+                                      classification=rule.classification)
+    containers = containers if containers is not None else consumable_containers()
+
+    def _day(w: WeldRecord) -> int:
+        return w.welded_at.day
+
+    # 每个有施工活动（焊口施焊或补焊）的日期开一段领用
+    days: dict[int, dict] = {}
+    for w in welds:
+        days.setdefault(_day(w), {"welds": [], "repairs": []})["welds"].append(w)
+    for r in repairs:
+        d = r.repaired_at.day
+        days.setdefault(d, {"welds": [], "repairs": []})["repairs"].append(r)
+
+    first_day = min(days)
+    last_day = max(days)
+
+    # 烘干：首个施工日 04:00 装炉（首日前一天无 2/30 时落在当日凌晨），
+    # 入炉即按 380℃ 恒温 1h（04:00/04:30/05:00 读数），取出后 5 分钟内转保温
+    if first_day > 1:
+        bake_loaded = _dt(2026, 3, first_day - 1, 5, 0, tzinfo=timezone.utc)
+    else:
+        bake_loaded = _dt(2026, 3, 1, 4, 0, tzinfo=timezone.utc)
+    bake_unloaded = bake_loaded + _td(hours=1)
+    bake_readings = [
+        TemperatureReading(at=bake_loaded, temp_c=380.0),
+        TemperatureReading(at=bake_loaded + _td(minutes=30), temp_c=380.0),
+        TemperatureReading(at=bake_unloaded, temp_c=380.0),
+    ]
+    bake = BakeCycle(
+        bake_id="BK-1", batch_id=batch_id, cycle_no=1,
+        oven_id="OV-1", oven_version="2026A",
+        loaded_at=bake_loaded, unloaded_at=bake_unloaded,
+        loaded_qty_kg=batch.received_qty_kg,
+        readings=bake_readings,
+    )
+
+    # 保温：5 分钟内转入保温筒，覆盖到最后一个施工日 19:00（退回事件之后）
+    stay_loaded = bake_unloaded + _td(minutes=5)
+    stay_end = _dt(2026, 3, last_day, 19, 0, tzinfo=timezone.utc)
+    stay_readings = _readings(stay_loaded, stay_end, hours_step=2, temp=120.0)
+    stay = QuiverStay(
+        stay_id="ST-1", batch_id=batch_id, bake_id="BK-1",
+        quiver_id="QV-1", quiver_version="2026A",
+        loaded_at=stay_loaded, unloaded_at=stay_end,
+        loaded_qty_kg=batch.received_qty_kg,
+        readings=stay_readings,
+    )
+
+    segments, events = [], []
+    use_seq = 0
+    for day in sorted(days):
+        seg_id = f"SG-{day:02d}"
+        issued_at = _dt(2026, 3, day, 8, 0, tzinfo=timezone.utc)
+        day_welds = days[day]["welds"]
+        day_repairs = days[day]["repairs"]
+        used = 0.0
+        for w in day_welds:
+            q = (issue_weld_uses or {}).get(w.weld_no, use_qty_weld)
+            use_seq += 1
+            w.consumables.append(ConsumableUse(
+                use_id=f"CU-{use_seq:03d}", batch_id=batch_id,
+                segment_id=seg_id, qty_kg=q,
+                used_at=w.welded_at))
+            used += q
+        for r in sorted(day_repairs, key=lambda x: x.iteration):
+            use_seq += 1
+            r.consumables.append(ConsumableUse(
+                use_id=f"CU-{use_seq:03d}", batch_id=batch_id,
+                segment_id=seg_id, qty_kg=use_qty_repair,
+                used_at=r.repaired_at))
+            used += use_qty_repair
+        # 当日领 5kg，未消耗余量 18:00 退回闭合
+        issued_qty = 5.0
+        returned = round(issued_qty - used, 3)
+        segments.append(ConsumableIssueSegment(
+            segment_id=seg_id, batch_id=batch_id, stay_id="ST-1",
+            issued_at=issued_at, issued_qty_kg=issued_qty,
+            issued_to="焊工班组"))
+        if returned > 1e-9:
+            events.append(ConsumableSegmentEvent(
+                event_id=f"EV-R{day:02d}", segment_id=seg_id,
+                event_type="return",
+                at=_dt(2026, 3, day, 18, 0, tzinfo=timezone.utc),
+                qty_kg=returned))
+
+    return {
+        "consumable_batches": [batch],
+        "consumable_rules": [rule],
+        "consumable_containers": containers,
+        "bake_cycles": [bake],
+        "quiver_stays": [stay],
+        "consumable_segments": segments,
+        "consumable_events": events,
+    }
+
+
 # ============================================================ 场景一：直接放行
 
 
@@ -248,6 +437,7 @@ def direct_release_payload() -> SubmissionPayload:
         rt("N-001", "W-001", "accept", day=2, bands=((0, 360),)),
         rt("N-002", "W-006", "accept", day=8, bands=((0, 360),)),
     ]
+    wm_chain = valid_consumable_chain(welds)
     return SubmissionPayload(
         package_ref="DEMO-1-DIRECT",
         line_no="PL-100",
@@ -260,6 +450,7 @@ def direct_release_payload() -> SubmissionPayload:
         nde=ndes,
         repairs=[],
         lot_rules=[lot(ratio=0.2)],
+        **wm_chain,
     )
 
 
@@ -296,6 +487,7 @@ def extension_payload(*, enough_extension: bool = True) -> SubmissionPayload:
     ndes.append(rt("N-051", "W-001", "accept", day=6,
                    bands=((280, 355),), iteration=1))
 
+    wm_chain = valid_consumable_chain(welds, repairs)
     return SubmissionPayload(
         package_ref="DEMO-2-EXTEND" if enough_extension
         else "DEMO-2-EXTEND-SHORT",
@@ -309,6 +501,7 @@ def extension_payload(*, enough_extension: bool = True) -> SubmissionPayload:
         nde=ndes,
         repairs=repairs,
         lot_rules=[lot(ratio=0.2, on_reject="double")],
+        **wm_chain,
     )
 
 
@@ -341,6 +534,7 @@ def double_repair_payload(*, second_covered: bool = True) -> SubmissionPayload:
     ndes.append(rt("N-902", "W-901", "accept", day=10,
                    bands=bands, iteration=2))
 
+    wm_chain = valid_consumable_chain(welds, repairs)
     return SubmissionPayload(
         package_ref="DEMO-3-REPAIR2" if second_covered
         else "DEMO-3-REPAIR2-UNCOVERED",
@@ -354,6 +548,7 @@ def double_repair_payload(*, second_covered: bool = True) -> SubmissionPayload:
         nde=ndes,
         repairs=repairs,
         lot_rules=[lot(rule_id="LOT-B", ratio=1.0, on_reject="full")],
+        **wm_chain,
     )
 
 
@@ -390,6 +585,7 @@ def ndt_resource_failure_payload() -> SubmissionPayload:
            equipment_uses=[NdeEquipmentUse(equipment_id="XR-250",
                                            version="2026B", role="main")]),
     ]
+    wm_chain = valid_consumable_chain(welds)
     return SubmissionPayload(
         package_ref="DEMO-4-NDT-RESOURCE",
         line_no="PL-100",
@@ -402,4 +598,62 @@ def ndt_resource_failure_payload() -> SubmissionPayload:
         nde=ndes,
         repairs=[],
         lot_rules=[lot(ratio=0.2, on_reject="double")],
+        **wm_chain,
+    )
+
+
+# ============================================================ 场景五：焊材链失效
+
+
+def consumable_failure_payload() -> SubmissionPayload:
+    """缺陷扩检样例上叠加焊材链失效（用于演示 WM 系列条款定位）。
+
+    - 保温筒 QV-1 校准在 3/4 到期（未登记重新校准版本）：3/4 之后的领用
+      全部落在保温筒校准失效区间，3/5 补焊与 3/6 后焊口失效；
+    - 3/5 补焊消耗登记 6.0kg，而该段只领出 5kg：消耗+退回 > 领出
+      （同一数量重复分配，WM-QTY-CONSERVATION），该段全部消耗失效；
+    - 3/8 领用段提前到 03:00 领出，W-008 09:00 施焊时暴露 6h
+      超过 4h 上限（WM-EXPOSURE-EXCEEDED）；
+    - 失效焊材不得用于返修闭合：W-001 一次返修链节保持 false
+      （RP-WM-INVALID，随附具体 WM 条款）。
+    """
+    from datetime import datetime as _dt
+
+    base = extension_payload().model_copy(deep=True)
+    # extension_payload 已挂过一次合规消耗；清空后用本场景的（失效）链重建
+    for w in base.welds:
+        w.consumables = []
+    for r in base.repairs:
+        r.consumables = []
+    wm_chain = valid_consumable_chain(base.welds, base.repairs)
+
+    # 保温筒校准 3/4 00:00 到期（重新校准应派生新版本，此处故意不登记）
+    for c in wm_chain["consumable_containers"]:
+        if c.container_id == "QV-1":
+            c.calibrated_to = _dt(2026, 3, 4, 0, 0, tzinfo=timezone.utc)
+
+    # 数量重复分配：3/5 段领出 5kg，把补焊消耗改成 6.0kg，
+    # 消耗 6.2 + 退回 4.7 > 领出 5
+    for rep in base.repairs:
+        for u in rep.consumables:
+            u.qty_kg = 6.0
+
+    # 3/8 段提前到 03:00 领出 -> W-008 09:00 施焊暴露 6h > 4h 上限
+    for seg in wm_chain["consumable_segments"]:
+        if seg.segment_id == "SG-08":
+            seg.issued_at = _dt(2026, 3, 8, 3, 0, tzinfo=timezone.utc)
+
+    return SubmissionPayload(
+        package_ref="DEMO-5-WELD-MATERIAL",
+        line_no=base.line_no,
+        submitted_by=base.submitted_by,
+        wps=base.wps,
+        welders=base.welders,
+        nde_personnel=base.nde_personnel,
+        nde_equipment=base.nde_equipment,
+        welds=base.welds,
+        nde=base.nde,
+        repairs=base.repairs,
+        lot_rules=base.lot_rules,
+        **wm_chain,
     )
