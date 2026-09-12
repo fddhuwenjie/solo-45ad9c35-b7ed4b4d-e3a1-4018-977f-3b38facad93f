@@ -9,7 +9,94 @@
     "findings_total": 0,
     "findings_hold": 0,
     "findings_warning": 0,
-    "repairs_total": 2
+    "repairs_total": 2,
+    "nde_reports_total": 3,
+    "nde_reports_excluded": 0,
+    "nde_personnel_total": 2,
+    "nde_equipment_versions_total": 2
+  },
+  "nde_resources": {
+    "personnel": [
+      {
+        "cert_no": "NRT-II-ZHANG",
+        "name": "NDE-II-张",
+        "method": "RT",
+        "level": "II",
+        "products": [
+          "pressure_pipe"
+        ],
+        "techniques": [
+          "film",
+          "digital"
+        ],
+        "valid_from": "2026-01-01T00:00:00+00:00",
+        "valid_to": "2026-12-31T23:59:59+00:00"
+      },
+      {
+        "cert_no": "NRT-II-LI",
+        "name": "NDE-II-李",
+        "method": "RT",
+        "level": "II",
+        "products": [
+          "pressure_pipe"
+        ],
+        "techniques": [
+          "film",
+          "digital"
+        ],
+        "valid_from": "2026-01-01T00:00:00+00:00",
+        "valid_to": "2026-12-31T23:59:59+00:00"
+      }
+    ],
+    "equipment": [
+      {
+        "equipment_id": "XR-250",
+        "version": "2026A",
+        "name": "250kV 便携式 X 射线机",
+        "kind": "xray_source",
+        "method": "RT",
+        "serial_no": "SN-XR-250-07",
+        "calibrated_from": "2026-01-01T00:00:00+00:00",
+        "calibrated_to": "2026-12-31T23:59:59+00:00",
+        "techniques": [
+          "film",
+          "digital"
+        ],
+        "range_min_mm": null,
+        "range_max_mm": null,
+        "energy_min_kev": 20.0,
+        "energy_max_kev": 250.0,
+        "source_isotope": null,
+        "uses": [
+          {
+            "equipment_id": "FILM-T2",
+            "version": "2026A",
+            "role": "film"
+          }
+        ]
+      },
+      {
+        "equipment_id": "FILM-T2",
+        "version": "2026A",
+        "name": "工业射线胶片 T2",
+        "kind": "film",
+        "method": "RT",
+        "serial_no": "SN-FILM-T2",
+        "calibrated_from": "2026-01-01T00:00:00+00:00",
+        "calibrated_to": "2026-12-31T23:59:59+00:00",
+        "techniques": [
+          "film",
+          "digital"
+        ],
+        "range_min_mm": null,
+        "range_max_mm": null,
+        "energy_min_kev": null,
+        "energy_max_kev": null,
+        "source_isotope": null,
+        "uses": []
+      }
+    ],
+    "invalid_reports": []
   },
   "lot_summaries": [
     {
@@ -24,6 +111,7 @@
       "required_final": 1,
       "examined_final": 1,
       "final_ratio": 1.0,
+      "excluded_reports": [],
       "decision": "release",
       "findings": []
     }
@@ -33,6 +121,7 @@
       "weld_no": "W-901",
       "line_no": "PL-100",
       "lot_id": "LOT-B",
+      "product": "pressure_pipe",
       "welded_at": "2026-03-01 09:00:00+00:00",
       "material_groups": [
         "Fe-1",
@@ -63,6 +152,8 @@
         8.18
       ],
       "nde_count": 3,
+      "nde_valid_count": 3,
+      "nde_excluded_count": 0,
       "nde": [
         {
           "nde_id": "N-900",
@@ -70,9 +161,109 @@
           "result": "reject",
           "iteration": 0,
           "examined_at": "2026-03-02 14:00:00+00:00",
+          "started_at": "2026-03-02 12:00:00+00:00",
+          "finished_at": "2026-03-02 14:00:00+00:00",
           "examiner": "NDE-II-张",
           "lot_id": null,
           "report_no": "RT-2026-N-900",
+          "technique": "film",
+          "applied_thickness_mm": null,
+          "exposure_energy_kev": 160.0,
+          "resource_valid": true,
+          "resource": {
+            "resource_valid": true,
+            "period": {
+              "started_at": "2026-03-02T12:00:00+00:00",
+              "finished_at": "2026-03-02T14:00:00+00:00"
+            },
+            "examiner": {
+              "cert_no": "NRT-II-ZHANG",
+              "cert": {
+                "cert_no": "NRT-II-ZHANG",
+                "name": "NDE-II-张",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "reviewer": {
+              "cert_no": "NRT-II-LI",
+              "cert": {
+                "cert_no": "NRT-II-LI",
+                "name": "NDE-II-李",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "equipment": [
+              {
+                "equipment_id": "XR-250",
+                "version": "2026A",
+                "role": "main",
+                "name": "250kV 便携式 X 射线机",
+                "kind": "xray_source",
+                "method": "RT",
+                "serial_no": "SN-XR-250-07",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": 20.0,
+                "energy_max_kev": 250.0,
+                "source_isotope": null,
+                "uses": [
+                  {
+                    "equipment_id": "FILM-T2",
+                    "version": "2026A",
+                    "role": "film"
+                  }
+                ]
+              },
+              {
+                "equipment_id": "FILM-T2",
+                "version": "2026A",
+                "role": "accessory",
+                "name": "工业射线胶片 T2",
+                "kind": "film",
+                "method": "RT",
+                "serial_no": "SN-FILM-T2",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": null,
+                "energy_max_kev": null,
+                "source_isotope": null,
+                "uses": []
+              }
+            ],
+            "failures": []
+          },
           "coverage": [
             {
               "full_circle": true,
@@ -94,9 +285,109 @@
           "result": "reject",
           "iteration": 1,
           "examined_at": "2026-03-06 14:00:00+00:00",
+          "started_at": "2026-03-06 12:00:00+00:00",
+          "finished_at": "2026-03-06 14:00:00+00:00",
           "examiner": "NDE-II-张",
           "lot_id": null,
           "report_no": "RT-2026-N-901",
+          "technique": "film",
+          "applied_thickness_mm": null,
+          "exposure_energy_kev": 160.0,
+          "resource_valid": true,
+          "resource": {
+            "resource_valid": true,
+            "period": {
+              "started_at": "2026-03-06T12:00:00+00:00",
+              "finished_at": "2026-03-06T14:00:00+00:00"
+            },
+            "examiner": {
+              "cert_no": "NRT-II-ZHANG",
+              "cert": {
+                "cert_no": "NRT-II-ZHANG",
+                "name": "NDE-II-张",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "reviewer": {
+              "cert_no": "NRT-II-LI",
+              "cert": {
+                "cert_no": "NRT-II-LI",
+                "name": "NDE-II-李",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "equipment": [
+              {
+                "equipment_id": "XR-250",
+                "version": "2026A",
+                "role": "main",
+                "name": "250kV 便携式 X 射线机",
+                "kind": "xray_source",
+                "method": "RT",
+                "serial_no": "SN-XR-250-07",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": 20.0,
+                "energy_max_kev": 250.0,
+                "source_isotope": null,
+                "uses": [
+                  {
+                    "equipment_id": "FILM-T2",
+                    "version": "2026A",
+                    "role": "film"
+                  }
+                ]
+              },
+              {
+                "equipment_id": "FILM-T2",
+                "version": "2026A",
+                "role": "accessory",
+                "name": "工业射线胶片 T2",
+                "kind": "film",
+                "method": "RT",
+                "serial_no": "SN-FILM-T2",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": null,
+                "energy_max_kev": null,
+                "source_isotope": null,
+                "uses": []
+              }
+            ],
+            "failures": []
+          },
           "coverage": [
             {
               "full_circle": false,
@@ -118,9 +409,109 @@
           "result": "accept",
           "iteration": 2,
           "examined_at": "2026-03-10 14:00:00+00:00",
+          "started_at": "2026-03-10 12:00:00+00:00",
+          "finished_at": "2026-03-10 14:00:00+00:00",
           "examiner": "NDE-II-张",
           "lot_id": null,
           "report_no": "RT-2026-N-902",
+          "technique": "film",
+          "applied_thickness_mm": null,
+          "exposure_energy_kev": 160.0,
+          "resource_valid": true,
+          "resource": {
+            "resource_valid": true,
+            "period": {
+              "started_at": "2026-03-10T12:00:00+00:00",
+              "finished_at": "2026-03-10T14:00:00+00:00"
+            },
+            "examiner": {
+              "cert_no": "NRT-II-ZHANG",
+              "cert": {
+                "cert_no": "NRT-II-ZHANG",
+                "name": "NDE-II-张",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "reviewer": {
+              "cert_no": "NRT-II-LI",
+              "cert": {
+                "cert_no": "NRT-II-LI",
+                "name": "NDE-II-李",
+                "method": "RT",
+                "level": "II",
+                "products": [
+                  "pressure_pipe"
+                ],
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-12-31T23:59:59+00:00"
+              }
+            },
+            "equipment": [
+              {
+                "equipment_id": "XR-250",
+                "version": "2026A",
+                "role": "main",
+                "name": "250kV 便携式 X 射线机",
+                "kind": "xray_source",
+                "method": "RT",
+                "serial_no": "SN-XR-250-07",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": 20.0,
+                "energy_max_kev": 250.0,
+                "source_isotope": null,
+                "uses": [
+                  {
+                    "equipment_id": "FILM-T2",
+                    "version": "2026A",
+                    "role": "film"
+                  }
+                ]
+              },
+              {
+                "equipment_id": "FILM-T2",
+                "version": "2026A",
+                "role": "accessory",
+                "name": "工业射线胶片 T2",
+                "kind": "film",
+                "method": "RT",
+                "serial_no": "SN-FILM-T2",
+                "calibrated_from": "2026-01-01T00:00:00+00:00",
+                "calibrated_to": "2026-12-31T23:59:59+00:00",
+                "techniques": [
+                  "film",
+                  "digital"
+                ],
+                "range_min_mm": null,
+                "range_max_mm": null,
+                "energy_min_kev": null,
+                "energy_max_kev": null,
+                "source_isotope": null,
+                "uses": []
+              }
+            ],
+            "failures": []
+          },
           "coverage": [
             {
               "full_circle": false,
@@ -199,5 +590,5 @@
   ],
   "findings": [],
   "clauses_triggered": [],
-  "evaluated_at": "2026-09-12 09:20:50.810795+00:00"
+  "evaluated_at": "2026-09-12 11:07:31.931984+00:00"
 }

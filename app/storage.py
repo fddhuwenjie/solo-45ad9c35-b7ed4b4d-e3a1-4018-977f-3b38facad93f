@@ -52,12 +52,22 @@ CREATE TABLE IF NOT EXISTS versions (
 KEY_FIELDS = {
     "wps": "wps_no",
     "welders": "welder_id",
+    "nde_personnel": "cert_no",
+    # 设备版本身份是 (equipment_id, version)：同序列号换探头/重新校准派生新版本
+    "nde_equipment": ("equipment_id", "version"),
     "welds": "weld_no",
     "nde": "nde_id",
     "repairs": "repair_id",
     "lot_rules": "lot_id",
 }
 SCALAR_SECTIONS = ("package_ref", "line_no", "submitted_by")
+
+
+def _item_key(item: dict, key_field) -> str:
+    """节内记录的稳定键：单字段直接取值；复合字段拼为 a/version。"""
+    if isinstance(key_field, tuple):
+        return "/".join(str(item[k]) for k in key_field)
+    return str(item[key_field])
 
 
 class StoreError(Exception):
@@ -336,8 +346,10 @@ def diff_snapshots(old: dict, new: dict) -> list[dict]:
                             "old": old.get(sec), "new": new.get(sec)})
 
     for sec, key_field in KEY_FIELDS.items():
-        old_items = {item[key_field]: item for item in old.get(sec, [])}
-        new_items = {item[key_field]: item for item in new.get(sec, [])}
+        old_items = {_item_key(item, key_field): item
+                     for item in old.get(sec, [])}
+        new_items = {_item_key(item, key_field): item
+                     for item in new.get(sec, [])}
         for key in sorted(set(new_items) - set(old_items)):
             changes.append({"kind": "added", "section": sec, "key": key,
                             "new": new_items[key]})

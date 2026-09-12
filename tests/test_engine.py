@@ -178,7 +178,51 @@ def test_lot_rule_missing():
 
 def test_method_mismatch_is_warning():
     p = direct_release_payload().model_copy(deep=True)
+    # 检验批规则要求 RT；两张抽检片都改为 UT（资源齐全），隔离出仅批方法不一致警告
     p.nde[0].method = "UT"
+    p.nde[1].method = "UT"
+    p.lot_rules[0].required_method = "RT"
+    # 方法改为 UT 后同步换用 UT 人员证书与设备版本
+    from app.schemas import NdePersonnelCert, NdeEquipmentVersion
+    p.nde_personnel = [
+        NdePersonnelCert(cert_no="NUT-II-ZHANG", name="UT-II-张", method="UT",
+                         level="II", products=["pressure_pipe"],
+                         techniques=["pulse_echo"],
+                         valid_from="2026-01-01T00:00:00Z",
+                         valid_to="2026-12-31T23:59:59Z"),
+        NdePersonnelCert(cert_no="NUT-II-LI", name="UT-II-李", method="UT",
+                         level="II", products=["pressure_pipe"],
+                         techniques=["pulse_echo"],
+                         valid_from="2026-01-01T00:00:00Z",
+                         valid_to="2026-12-31T23:59:59Z"),
+    ]
+    p.nde_equipment = [
+        NdeEquipmentVersion(equipment_id="UTD-100", version="2026A",
+                            name="数字超声探伤仪", kind="ut_flaw_detector",
+                            method="UT", serial_no="SN-UTD-100",
+                            calibrated_from="2026-01-01T00:00:00Z",
+                            calibrated_to="2026-12-31T23:59:59Z",
+                            techniques=["pulse_echo"],
+                            range_min_mm=0.0, range_max_mm=500.0),
+        NdeEquipmentVersion(equipment_id="PRB-5P", version="2026A",
+                            name="5MHz 斜探头", kind="ut_probe", method="UT",
+                            serial_no="SN-PRB-5P",
+                            calibrated_from="2026-01-01T00:00:00Z",
+                            calibrated_to="2026-12-31T23:59:59Z",
+                            techniques=["pulse_echo"], range_min_mm=0.0,
+                            range_max_mm=100.0),
+    ]
+    from app.schemas import NdeEquipmentUse
+    for rec in p.nde:
+        rec.examiner_cert_no = "NUT-II-ZHANG"
+        rec.reviewer_cert_no = "NUT-II-LI"
+        rec.equipment_uses = [
+            NdeEquipmentUse(equipment_id="UTD-100", version="2026A", role="main"),
+            NdeEquipmentUse(equipment_id="PRB-5P", version="2026A", role="probe"),
+        ]
+        rec.technique = "pulse_echo"
+        rec.applied_thickness_mm = 12.0
+        rec.exposure_energy_kev = None
     assert "NDE-METHOD-LOT-MISMATCH" in weld_codes(p, "W-001")
     assert evaluate(p)["decision"] == "release"
 
@@ -347,8 +391,12 @@ def test_repair_earlier_than_reject_film_is_order_invalid():
     """补焊时刻早于在先不合格底片：RP-ORDER-INVALID，链不闭合。"""
     data, n0, n1, rep = _single_repair_payload_dict()
     n0["examined_at"] = "2026-03-06T14:00:00Z"
+    n0["started_at"] = "2026-03-06T12:00:00Z"
+    n0["finished_at"] = "2026-03-06T14:00:00Z"
     rep["repaired_at"] = "2026-03-04T10:00:00Z"
     n1["examined_at"] = "2026-03-08T14:00:00Z"
+    n1["started_at"] = "2026-03-08T12:00:00Z"
+    n1["finished_at"] = "2026-03-08T14:00:00Z"
     n1["result"] = "accept"
     n1["defect_locations"] = []
     n1["coverage"] = [b for b in [
@@ -366,8 +414,12 @@ def test_reinspection_earlier_than_repair_is_order_invalid():
     """复检底片早于补焊：判次序倒置且该底片不得充当复检 => hold。"""
     data, n0, n1, rep = _single_repair_payload_dict()
     n0["examined_at"] = "2026-03-02T14:00:00Z"
+    n0["started_at"] = "2026-03-02T12:00:00Z"
+    n0["finished_at"] = "2026-03-02T14:00:00Z"
     rep["repaired_at"] = "2026-03-06T10:00:00Z"
     n1["examined_at"] = "2026-03-04T14:00:00Z"  # 早于补焊
+    n1["started_at"] = "2026-03-04T12:00:00Z"
+    n1["finished_at"] = "2026-03-04T14:00:00Z"
     n1["result"] = "accept"
     n1["defect_locations"] = []
     n1["coverage"] = [{"start_deg": 180, "end_deg": 250,
@@ -385,8 +437,12 @@ def test_equal_timestamp_is_not_valid_order():
     """补焊与不合格底片同一时刻也不满足严格先后（必须先发现后补焊）。"""
     data, n0, n1, rep = _single_repair_payload_dict()
     n0["examined_at"] = "2026-03-04T10:00:00Z"
+    n0["started_at"] = "2026-03-04T08:00:00Z"
+    n0["finished_at"] = "2026-03-04T10:00:00Z"
     rep["repaired_at"] = "2026-03-04T10:00:00Z"
     n1["examined_at"] = "2026-03-06T14:00:00Z"
+    n1["started_at"] = "2026-03-06T12:00:00Z"
+    n1["finished_at"] = "2026-03-06T14:00:00Z"
     n1["result"] = "accept"
     n1["defect_locations"] = []
     n1["coverage"] = [{"start_deg": 180, "end_deg": 250,
@@ -410,6 +466,8 @@ def test_mixed_early_and_late_reinspection_blocks_closure():
                              "full_circle": False}
     n1["nde_id"] = "N-EARLY"
     n1["examined_at"] = "2026-03-03T14:00:00Z"   # 早于补焊
+    n1["started_at"] = "2026-03-03T12:00:00Z"
+    n1["finished_at"] = "2026-03-03T14:00:00Z"
     n1["result"] = "accept"
     n1["defect_locations"] = []
     n1["coverage"] = [{"start_deg": 180, "end_deg": 250,
@@ -418,7 +476,14 @@ def test_mixed_early_and_late_reinspection_blocks_closure():
     data["nde"].append({
         "nde_id": "N-LATE", "weld_no": "W-901", "method": "RT",
         "result": "accept", "examined_at": "2026-03-06T14:00:00Z",
-        "examiner": "x", "lot_id": None,
+        "started_at": "2026-03-06T12:00:00Z",
+        "finished_at": "2026-03-06T14:00:00Z",
+        "examiner": "x", "examiner_cert_no": "NRT-II-ZHANG",
+        "reviewer_cert_no": "NRT-II-LI",
+        "equipment_uses": [{"equipment_id": "XR-250", "version": "2026A",
+                            "role": "main"}],
+        "technique": "film", "applied_thickness_mm": None,
+        "exposure_energy_kev": 160.0, "lot_id": None,
         "coverage": [{"start_deg": 180, "end_deg": 250,
                       "full_circle": False}],
         "defect_locations": [], "iteration": 1, "report_no": None,

@@ -27,6 +27,7 @@ C_REINSPECT_OK = "#1565c0"
 C_REINSPECT_NG = "#c62828"
 C_INIT_OK = "#66bb6a"
 C_INIT_NG = "#ef5350"
+C_RES_INVALID = "#616161"
 C_GRID = "#90a4ae"
 
 
@@ -99,6 +100,14 @@ def render_weld_svg(verdict: dict) -> str:
     parts.append(
         '<rect width="1000" height="760" fill="#fafafa" stroke="#cfd8dc"/>'
     )
+    # 资源失效报告的斜纹叠加（灰）
+    parts.append(
+        '<defs><pattern id="ndexcluded" width="8" height="8" '
+        'patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+        '<rect width="8" height="8" fill="#9e9e9e" fill-opacity="0.18"/>'
+        '<line x1="0" y1="0" x2="0" y2="8" stroke="#616161" stroke-width="3"/></pattern>'
+        "</defs>"
+    )
 
     # ---- 标题 ----
     title = f"焊口 {verdict['weld_no']} · 管线 {verdict['line_no']}"
@@ -149,6 +158,20 @@ def render_weld_svg(verdict: dict) -> str:
                 parts.append(
                     f'<path d="{d}" fill="{C_DEFECT}"/>'
                 )
+        # 资源核验未通过的报告：灰斜纹叠加并标注证号/设备失效
+        if rec.get("resource_valid") is False:
+            reasons = sorted({
+                x["code"] for x in rec.get("resource", {}).get("failures", [])
+            })
+            for b in rec["coverage"]:
+                for d in _band_path(266, 300, b):
+                    parts.append(
+                        f'<path d="{d}" fill="url(#ndexcluded)" '
+                        f'stroke="{C_RES_INVALID}" stroke-width="1.2" '
+                        f'stroke-dasharray="3,2"><title>'
+                        f'报告 {rec.get("report_no") or rec["nde_id"]} '
+                        f'资源核验未通过，已剔除：{"、".join(reasons)}</title></path>'
+                    )
         drawn.add(rec["nde_id"])
 
     if not verdict.get("nde"):
@@ -195,6 +218,10 @@ def render_weld_svg(verdict: dict) -> str:
         f"施焊: {verdict['welded_at'].strftime('%Y-%m-%d %H:%M') if hasattr(verdict['welded_at'], 'strftime') else str(verdict['welded_at'])[:16]}",
         f"返修: {len(verdict.get('repairs', []))} 次",
     ]
+    if verdict.get("nde_excluded_count"):
+        inner_lines.append(
+            f"剔除报告: {verdict['nde_excluded_count']} 份（资源失效）"
+        )
     for i, line in enumerate(inner_lines):
         parts.append(
             f'<text x="{CX}" y="{CY - 52 + i * 24}" font-size="15" '
@@ -245,6 +272,7 @@ def render_weld_svg(verdict: dict) -> str:
         (C_INIT_OK, "原始检测合格覆盖"),
         (C_INIT_NG, "原始检测（不合格底片）"),
         (C_DEFECT, "缺陷显示位置"),
+        (C_RES_INVALID, "资源失效报告（灰斜纹=已剔除）"),
         (C_REPAIR1, "一次挖补返修区"),
         (C_REPAIR2, "二次挖补返修区"),
         (C_REINSPECT_OK, "复检覆盖（合格）"),

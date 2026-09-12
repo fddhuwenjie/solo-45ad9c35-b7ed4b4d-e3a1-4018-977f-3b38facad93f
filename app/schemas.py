@@ -15,6 +15,19 @@ NdeMethod = Literal["RT", "UT", "PT"]
 NdeResult = Literal["accept", "reject"]
 RepairMode = Literal["double", "full"]
 Decision = Literal["release", "hold"]
+# 无损检测人员资格级别（NB/T 47013：I 级可在 II/III 级指导下操作，
+# II 级可评定检测结果、签发报告，III 级为最高）
+NdeLevel = Literal["I", "II", "III"]
+# 设备版本类别：决定按量程(UT)还是能量范围(RT)核对参数
+EquipmentKind = Literal[
+    "xray_source",      # X 射线机
+    "gamma_source",     # γ 射线源
+    "ut_flaw_detector", # UT 探伤仪主机
+    "ut_probe",         # UT 探头（本身须有校准有效期）
+    "pt_materials",     # 渗透检测材料包
+    "film",             # 胶片/IP 板等
+    "other",
+]
 
 
 def _as_utc(dt: datetime) -> datetime:
@@ -103,6 +116,107 @@ class WelderQual(QualRange):
     stamp: Optional[str] = None
 
 
+# ---------------------------------------------------------------- 无损检测资源
+#
+# 资源按"版本"登记，检测记录引用版本身份：
+# - 人员证书以 cert_no 为稳定身份（续证后换新证号/同号新窗均应作为新登记记录，
+#   旧记录保留在已冻结快照中，续证不回写旧版）；
+# - 设备以 serial_no + version 标识同一台设备的一次校准配置版本，
+#   换探头、重新校准即派生新版本；关键附件以 use 列表引用的其它设备版本体现。
+
+
+class NdePersonnelCert(UtcModel):
+    """无损检测人员资格证书（RT/UT/PT 方法与级别、产品、技术范围、有效期）。
+
+    同一证号在包内仅可登记一条；续证/换证请使用新证号或新审查包版本。
+    """
+
+    cert_no: str = Field(min_length=1, description="证书编号，包内唯一")
+    name: str = Field(min_length=1, description="持证人员姓名")
+    method: NdeMethod
+    level: NdeLevel
+    products: list[str] = Field(
+        min_length=1,
+        description="认可产品，如 pressure_pipe(承压管道)/pressure_vessel/boiler",
+    )
+    techniques: list[str] = Field(
+        default_factory=list,
+        description="认可检测技术范围，如 RT:[film/digital]、UT:[pulse_echo/tofd/pa]、"
+                    "PT:[solvent_removable/water_washable]",
+    )
+    valid_from: datetime
+    valid_to: datetime
+    employer: Optional[str] = Field(default=None, description="执业单位（备查）")
+
+    @model_validator(mode="after")
+    def _check_window(self) -> "NdePersonnelCert":
+        if _as_utc(self.valid_to) <= _as_utc(self.valid_from):
+            raise ValueError("valid_to 必须晚于 valid_from")
+        return self
+
+
+class NdeEquipmentUse(UtcModel):
+    """检测实施中对一个设备版本的引用（主设备或关键附件）。"""
+
+    equipment_id: str = Field(min_length=1)
+    version: str = Field(min_length=1, description="设备配置版本号，如 v1/2026A")
+    role: str = Field(
+        default="main",
+        description="用途：main=主设备；probe/film/consumable 等为关键附件",
+    )
+
+
+class NdeEquipmentVersion(UtcModel):
+    """一台无损检测设备的一个校准配置版本。
+
+    序列号不变、换探头/换源/重新校准则产生新版本（version 不同）；
+    量程范围（UT 探伤仪/探头）或能量范围（射线源）按检测实际参数核对；
+    关键附件（探头、胶片等）以 uses 引用，引用缺失/未校准视为该版本不完整。
+    """
+
+    equipment_id: str = Field(min_length=1, description="设备编号（同机跨版本稳定）")
+    version: str = Field(min_length=1, description="配置/校准版本号，同机唯一")
+    name: str = Field(min_length=1, description="设备名称")
+    kind: EquipmentKind
+    method: NdeMethod = Field(description="适用检测方法")
+    serial_no: str = Field(min_length=1, description="出厂序列号")
+    calibrated_from: datetime = Field(description="校准有效期起点")
+    calibrated_to: datetime = Field(description="校准有效期止点（含）")
+    techniques: list[str] = Field(
+        default_factory=list, description="支持的检测技术，与人员证书技术范围同口径"
+    )
+    # UT 设备：量程范围（声程 mm）；射线源：能量范围
+    range_min_mm: Optional[float] = Field(default=None, ge=0, description="UT 量程下限(mm)")
+    range_max_mm: Optional[float] = Field(default=None, gt=0, description="UT 量程上限(mm)")
+    energy_min_kev: Optional[float] = Field(
+        default=None, ge=0, description="射线能量下限(keV；X 机为管电压，γ源为光子能量)"
+    )
+    energy_max_kev: Optional[float] = Field(
+        default=None, gt=0, description="射线能量上限(keV)"
+    )
+    source_isotope: Optional[str] = Field(
+        default=None, description="γ 源核素，如 Ir-192 / Co-60；X 机留空"
+    )
+    uses: list[NdeEquipmentUse] = Field(
+        default_factory=list, description="关键附件（探头/胶片/耗材）引用的设备版本"
+    )
+
+    @model_validator(mode="after")
+    def _check_self(self) -> "NdeEquipmentVersion":
+        cf, ct = _as_utc(self.calibrated_from), _as_utc(self.calibrated_to)
+        if ct <= cf:
+            raise ValueError("calibrated_to 必须晚于 calibrated_from")
+        if self.range_max_mm is not None and self.range_min_mm is not None \
+                and self.range_max_mm < self.range_min_mm:
+            raise ValueError("range_max_mm 不得小于 range_min_mm")
+        if self.energy_max_kev is not None and self.energy_min_kev is not None \
+                and self.energy_max_kev < self.energy_min_kev:
+            raise ValueError("energy_max_kev 不得小于 energy_min_kev")
+        if self.kind == "gamma_source" and not self.source_isotope:
+            raise ValueError("kind=gamma_source 时必须填写 source_isotope")
+        return self
+
+
 # ---------------------------------------------------------------- 焊口本体
 
 
@@ -118,6 +232,10 @@ class WeldRecord(UtcModel):
     welder_id: str
     wps_no: str
     lot_id: Optional[str] = Field(default=None, description="所属检验批；无抽检批时为空")
+    product: str = Field(
+        default="pressure_pipe",
+        description="产品类别，与 NDT 人员证书 products 认可范围核对（默认承压管道）",
+    )
 
 
 # ---------------------------------------------------------------- 检测与返修
@@ -128,8 +246,36 @@ class NdeRecord(UtcModel):
     weld_no: str
     method: NdeMethod
     result: NdeResult
-    examined_at: datetime
-    examiner: Optional[str] = None
+    examined_at: datetime = Field(description="检测/报告时刻（排序与抽检时序用）")
+    started_at: Optional[datetime] = Field(
+        default=None, description="实施开始时刻；缺省与 examined_at 同时刻"
+    )
+    finished_at: Optional[datetime] = Field(
+        default=None, description="实施结束时刻；缺省与 examined_at 同时刻"
+    )
+    examiner: Optional[str] = Field(default=None, description="实施人姓名（展示用）")
+    examiner_cert_no: Optional[str] = Field(
+        default=None, description="实施人员证书编号（引用 nde_personnel）"
+    )
+    reviewer_cert_no: Optional[str] = Field(
+        default=None, description="复核/评片人员证书编号（引用 nde_personnel）"
+    )
+    equipment_uses: list[NdeEquipmentUse] = Field(
+        default_factory=list, description="本次检测使用的设备版本（主设备+关键附件）"
+    )
+    technique: Optional[str] = Field(
+        default=None,
+        description="实际检测技术，如 film/digital、pulse_echo/tofd/pa、"
+                    "solvent_removable",
+    )
+    applied_thickness_mm: Optional[float] = Field(
+        default=None, gt=0,
+        description="实际检测声程/壁厚(mm)：与 UT 设备量程范围核对",
+    )
+    exposure_energy_kev: Optional[float] = Field(
+        default=None, gt=0,
+        description="实际射线能量(keV)：与射线源能量范围核对",
+    )
     lot_id: Optional[str] = Field(default=None, description="该底片计入哪个检验批的抽检")
     # 本次检测覆盖的环向范围（RT/UT 为若干张片；PT 通常为全周）
     coverage: list[AngleBand] = Field(default_factory=list)
@@ -145,7 +291,23 @@ class NdeRecord(UtcModel):
     def _check_result(self) -> "NdeRecord":
         if self.result == "reject" and not self.defect_locations:
             raise ValueError("nde 记录为 reject 时必须给出 defect_locations")
+        start = self.started_at or self.examined_at
+        finish = self.finished_at or self.examined_at
+        if not (start <= self.examined_at <= finish):
+            raise ValueError(
+                "检测时段必须满足 started_at <= examined_at <= finished_at"
+            )
         return self
+
+    @property
+    def period_start(self) -> datetime:
+        """实施时段起点（UTC）。"""
+        return _as_utc(self.started_at or self.examined_at)
+
+    @property
+    def period_end(self) -> datetime:
+        """实施时段终点（UTC）：资源有效性必须持续覆盖整个时段。"""
+        return _as_utc(self.finished_at or self.examined_at)
 
 
 class RepairRecord(UtcModel):
@@ -177,6 +339,13 @@ class SubmissionPayload(UtcModel):
     submitted_by: Optional[str] = None
     wps: list[WpsRecord] = Field(default_factory=list)
     welders: list[WelderQual] = Field(default_factory=list)
+    nde_personnel: list[NdePersonnelCert] = Field(
+        default_factory=list, description="无损检测人员证书登记（证号唯一）"
+    )
+    nde_equipment: list[NdeEquipmentVersion] = Field(
+        default_factory=list,
+        description="无损检测设备版本登记（equipment_id+version 唯一）",
+    )
     welds: list[WeldRecord] = Field(min_length=1)
     nde: list[NdeRecord] = Field(default_factory=list)
     repairs: list[RepairRecord] = Field(default_factory=list)
@@ -195,6 +364,17 @@ class SubmissionPayload(UtcModel):
         wps_set = {w.wps_no for w in self.wps}
         welder_set = {w.welder_id for w in self.welders}
         lot_set = {r.lot_id for r in self.lot_rules}
+
+        # NDT 资源身份唯一：证号唯一；设备 (编号,版本) 唯一。
+        # 检测记录引用缺失不在此拒绝（沿用未登记 WPS 的引擎挂条款口径）。
+        cert_nos = [c.cert_no for c in self.nde_personnel]
+        if len(set(cert_nos)) != len(cert_nos):
+            dupes = sorted({n for n in cert_nos if cert_nos.count(n) > 1})
+            errors.append(f"NDT 人员证书编号重复: {dupes}")
+        equip_keys = [(e.equipment_id, e.version) for e in self.nde_equipment]
+        if len(set(equip_keys)) != len(equip_keys):
+            dupes = sorted({k for k in equip_keys if equip_keys.count(k) > 1})
+            errors.append(f"NDT 设备版本标识重复 (equipment_id,version): {dupes}")
 
         for w in self.welds:
             if w.wps_no not in wps_set:
@@ -249,6 +429,7 @@ class Finding(BaseModel):
     lot_id: Optional[str] = None
     nde_id: Optional[str] = None
     repair_id: Optional[str] = None
+    report_no: Optional[str] = None
     evidence: dict = Field(default_factory=dict)
 
 
@@ -293,6 +474,10 @@ class LotSummary(BaseModel):
     required_final: int
     examined_final: int
     final_ratio: float
+    excluded_reports: list[dict] = Field(
+        default_factory=list,
+        description="因 NDT 资源核验未通过而从抽检/扩检剔除的报告清单",
+    )
     decision: Decision
     findings: list[Finding] = Field(default_factory=list)
 
@@ -315,6 +500,10 @@ class ReviewPack(BaseModel):
     stats: dict
     lot_summaries: list[LotSummary] = Field(default_factory=list)
     welds: list[WeldVerdict] = Field(default_factory=list)
+    nde_resources: dict = Field(
+        default_factory=dict,
+        description="人员证书/设备版本登记目录与被剔除报告清单（资源版本+失效原因）",
+    )
     findings: list[Finding] = Field(default_factory=list)
     clauses_triggered: list[str] = Field(default_factory=list)
 

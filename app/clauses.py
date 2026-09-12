@@ -8,6 +8,7 @@
 - HT 系列：炉批（材料可追溯）。
 - LT 系列：检验批抽检比例与扩检。
 - RP 系列：返修、复检与沿缺陷位置的串接。
+- NR 系列：无损检测资源核验（人员证书、设备版本按整个实施时段持续有效）。
 """
 from __future__ import annotations
 
@@ -105,6 +106,103 @@ CLAUSES: dict[str, dict[str, str]] = {
         "category": ClauseCategory.RECORD.value,
         "reference": "质量记录完整性：检测单引用的检验批应在报检范围内",
         "message": "检测记录引用了未登记的检验批编号",
+    },
+    # ---- 无损检测资源核验：人员证书 / 设备版本，按整个实施时段持续有效 ----
+    "NR-CERT-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013 / TSG Z8001：检测报告应注明持证实施与复核人员",
+        "message": "检测记录引用的实施/复核人员证书未登记（引用缺失）",
+    },
+    "NR-CERT-METHOD": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013：人员资格项目应与实际检测方法一致",
+        "message": "人员证书认可方法与检测实际方法不一致",
+    },
+    "NR-CERT-LEVEL": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013：I 级在 II/III 级指导下操作；II 级及以上方可"
+                     "评定结果、复核与签发报告",
+        "message": "人员证书级别不足（实施至少 I 级，复核/评片至少 II 级）",
+    },
+    "NR-CERT-PRODUCT": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "TSG Z8001 / NB/T 47013：持证项目应覆盖实际检测产品类别",
+        "message": "人员证书认可产品未覆盖该焊口产品（如承压管道）",
+    },
+    "NR-CERT-TECHNIQUE": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013：持证检测技术范围应覆盖实际工艺"
+                     "（如 TOFD/PA、数字射线、渗透剂类型）",
+        "message": "实际检测技术超出人员证书认可的检测技术范围",
+    },
+    "NR-CERT-EXPIRED": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "TSG Z8001：证书应在有效期内实施检测；跨到期点的夜班"
+                     "时段不得整体采信",
+        "message": "人员证书未在整个检测实施时段内持续有效"
+                   "（时段跨过到期点或检测时证书尚未生效）",
+    },
+    "NR-ROLE-CONFLICT": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013 / 质量体系：检测实施与复核/评片应由不同人员承担",
+        "message": "实施人员与复核人员为同一证书（自己检测自己复核，角色冲突）",
+    },
+    "NR-EQUIP-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "质量记录完整性：检测报告应可追溯所用设备的具体校准版本",
+        "message": "检测记录引用的设备版本（或其关键附件版本）未登记（引用缺失）",
+    },
+    "NR-EQUIP-METHOD": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013：设备应适用于规定的检测方法",
+        "message": "设备版本不适用本次检测方法",
+    },
+    "NR-EQUIP-CALIBRATION": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013：检测设备与探头应在校准/核查有效期内使用；"
+                     "跨到期点的检测时段不得整体采信",
+        "message": "设备（含关键附件）校准有效期未持续覆盖整个检测实施时段"
+                   "（夜班跨校准到期点或使用未校准设备/探头）",
+    },
+    "NR-EQUIP-PARAMETER": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013：实际声程应在探伤仪量程内、实际射线能量"
+                     "应在射线源/管电压能力范围内",
+        "message": "设备量程或能量范围不匹配实际检测参数"
+                   "（声程超量程 / 能量超出源能力）",
+    },
+    "NR-EQUIP-TECHNIQUE": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013：设备能力应支持所用检测技术（如 TOFD/PA、数字成像）",
+        "message": "设备版本不支持实际检测技术",
+    },
+    "NR-EQUIP-ACCESSORY": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013：探头、胶片/IP 板等关键附件应与方法、技术匹配"
+                     "并单独处于有效期内",
+        "message": "关键附件不匹配或缺失（RT 未登记胶片/IP、UT 未登记探头，"
+                   "或附件方法/技术不一致）",
+    },
+    "NR-RECORD-EXCLUDED": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "质量记录完整性：人员资格或设备状态在检测当时无效的报告"
+                     "不得计入抽检、扩检与返修复检",
+        "message": "该检测报告因 NDT 资源核验未通过，已从抽检/扩检/返修复检"
+                   "计数中剔除（同一张底片不能既覆盖焊缝又覆盖资源资格）",
     },
     # ---- 检验批 ----
     "LT-RULE-MISSING": {

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 from . import geometry as geo
 from .clauses import CLAUSES, Severity
+from .nde_resource import verify_nde_resource
 from .qualification import (
     match_welder,
     match_wps,
@@ -33,7 +34,7 @@ MAX_REPAIRS = 2
 
 
 def _finding(code: str, *, weld_no=None, lot_id=None, nde_id=None,
-             repair_id=None, evidence=None) -> dict:
+             repair_id=None, report_no=None, evidence=None) -> dict:
     meta = CLAUSES[code]
     return {
         "code": code,
@@ -45,6 +46,7 @@ def _finding(code: str, *, weld_no=None, lot_id=None, nde_id=None,
         "lot_id": lot_id,
         "nde_id": nde_id,
         "repair_id": repair_id,
+        "report_no": report_no,
         "evidence": evidence or {},
     }
 
@@ -57,14 +59,21 @@ def _ceil_ratio(ratio: float, total: int) -> int:
 
 
 def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
-                           repairs: list[RepairRecord], wps_index, welder_index):
-    """沿缺陷位置串接 原始不合格 -> 挖补 -> 复检，返回 (findings, links, closed)。"""
+                           repairs: list[RepairRecord], wps_index, welder_index,
+                           nde_valid: dict[str, bool] | None = None):
+    """沿缺陷位置串接 原始不合格 -> 挖补 -> 复检，返回 (findings, links, closed)。
+
+    资源核验未通过的检测记录（nde_valid[nde_id]=False）一律不参与串接：
+    既不能作为不合格缺陷依据，也不能作为返修复检合格片。
+    """
+    nde_valid = nde_valid or {}
     findings: list[dict] = []
     links: list[dict] = []
 
     ndes_by_iter: dict[int, list[NdeRecord]] = defaultdict(list)
     for r in ndes:
-        ndes_by_iter[r.iteration].append(r)
+        if nde_valid.get(r.nde_id, True):
+            ndes_by_iter[r.iteration].append(r)
     for lst in ndes_by_iter.values():
         lst.sort(key=lambda r: r.examined_at)
 
@@ -372,8 +381,13 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
 # ================================================================ 检验批
 
 
-def _evaluate_lots(payload: SubmissionPayload, weld_index, hold_welds):
-    """按时间序模拟抽检与扩检。返回 (lot_findings_per_weld, lot_summaries)。"""
+def _evaluate_lots(payload: SubmissionPayload, weld_index, hold_welds,
+                   nde_valid: dict[str, bool]):
+    """按时间序模拟抽检与扩检。返回 (lot_findings_per_weld, lot_summaries)。
+
+    资源核验未通过的检测报告（nde_valid=False）不计入抽检/扩检口数，
+    也不构成扩检触发事件（不能凭无效底片认定扩检序列）。
+    """
     rules = {rule.lot_id: rule for rule in payload.lot_rules}
 
     # 焊口按所属检验批分组；焊口带了 lot_id 但未登记规则也要建组（LT-RULE-MISSING）
@@ -386,15 +400,27 @@ def _evaluate_lots(payload: SubmissionPayload, weld_index, hold_welds):
     ndes_by_lot: dict[str, list[NdeRecord]] = defaultdict(list)
     orphan_findings: list[dict] = []
     method_warnings: list[dict] = []
+    excluded_by_lot: dict[str, list[dict]] = defaultdict(list)
     for rec in payload.nde:
-        lot_id = rec.lot_id or (weld_index.get(rec.weld_no).lot_id
-                                if weld_index.get(rec.weld_no) else None)
+        weld = weld_index.get(rec.weld_no)
+        lot_id = rec.lot_id or (weld.lot_id if weld else None)
+        if not nde_valid.get(rec.nde_id, True):
+            if lot_id is not None:
+                excluded_by_lot[lot_id].append({
+                    "nde_id": rec.nde_id,
+                    "report_no": rec.report_no,
+                    "weld_no": rec.weld_no,
+                    "iteration": rec.iteration,
+                })
+            # 资源失效报告不计入后续任何批核算
+            continue
         if lot_id is None:
             continue
         if lot_id not in rules and lot_id not in welds_by_lot:
             orphan_findings.append(_finding(
                 "NDE-UNKNOWN-LOT",
                 weld_no=rec.weld_no, lot_id=lot_id, nde_id=rec.nde_id,
+                report_no=rec.report_no,
             ))
             continue
         ndes_by_lot[lot_id].append(rec)
@@ -403,6 +429,7 @@ def _evaluate_lots(payload: SubmissionPayload, weld_index, hold_welds):
             method_warnings.append(_finding(
                 "NDE-METHOD-LOT-MISMATCH",
                 weld_no=rec.weld_no, lot_id=lot_id, nde_id=rec.nde_id,
+                report_no=rec.report_no,
                 evidence={"required": rule.required_method, "actual": rec.method},
             ))
 
@@ -422,7 +449,7 @@ def _evaluate_lots(payload: SubmissionPayload, weld_index, hold_welds):
             ))
             summaries.append(_lot_summary(
                 lot_id, None, 0.0, n_total, 0, 0, False, None, 0, 0, 0.0,
-                "hold", findings))
+                "hold", findings, excluded_by_lot.get(lot_id, [])))
             lot_findings[lot_id] = findings
             continue
 
@@ -518,6 +545,7 @@ def _evaluate_lots(payload: SubmissionPayload, weld_index, hold_welds):
                      r.examined_at for r in reject_events)]),
             extended, extension_mode, required_final, examined_final,
             round(examined_final / n_total, 4), decision, findings,
+            excluded_by_lot.get(lot_id, []),
         ))
         lot_findings[lot_id] = findings
 
@@ -538,7 +566,7 @@ def _evaluate_lots(payload: SubmissionPayload, weld_index, hold_welds):
 
 def _lot_summary(lot_id, method, ratio, total, req_init, exam_init,
                  extended, mode, req_final, exam_final, final_ratio,
-                 decision, findings) -> dict:
+                 decision, findings, excluded_reports=None) -> dict:
     return {
         "lot_id": lot_id,
         "required_method": method,
@@ -551,6 +579,7 @@ def _lot_summary(lot_id, method, ratio, total, req_init, exam_init,
         "required_final": req_final,
         "examined_final": exam_final,
         "final_ratio": final_ratio,
+        "excluded_reports": excluded_reports or [],
         "decision": decision,
         "findings": findings,
     }
@@ -560,7 +589,8 @@ def _lot_summary(lot_id, method, ratio, total, req_init, exam_init,
 
 
 def _evaluate_weld(weld: WeldRecord, payload: SubmissionPayload,
-                   wps_index, welder_index):
+                   wps_index, welder_index,
+                   nde_valid: dict[str, bool] | None = None):
     findings: list[dict] = []
 
     # 炉批：两个母材端都必须有炉批号；异径提示
@@ -606,7 +636,7 @@ def _evaluate_weld(weld: WeldRecord, payload: SubmissionPayload,
     # 抽样批中未抽中的焊口不应被判为"无检测"。
 
     chain_findings, links, _chain_closed = _evaluate_repair_chain(
-        weld, ndes, repairs, wps_index, welder_index
+        weld, ndes, repairs, wps_index, welder_index, nde_valid
     )
     findings.extend(chain_findings)
 
@@ -620,12 +650,59 @@ def evaluate(payload: SubmissionPayload) -> dict:
     wps_index = {w.wps_no: w for w in payload.wps}
     welder_index = {w.welder_id: w for w in payload.welders}
     weld_index = {w.weld_no: w for w in payload.welds}
+    cert_index = {c.cert_no: c for c in payload.nde_personnel}
+    equip_index = {(e.equipment_id, e.version): e for e in payload.nde_equipment}
+
+    # ---- 0) 无损检测资源核验：按整个实施时段检查人员证书与设备版本 ----
+    nde_resources: dict[str, dict] = {}
+    nde_valid: dict[str, bool] = {}
+    resource_findings: dict[str, list[dict]] = defaultdict(list)
+    for rec in payload.nde:
+        weld = weld_index.get(rec.weld_no)
+        product = weld.product if weld else "pressure_pipe"
+        verdict = verify_nde_resource(
+            rec, product=product,
+            cert_index=cert_index, equip_index=equip_index,
+        )
+        nde_resources[rec.nde_id] = verdict
+        nde_valid[rec.nde_id] = verdict["resource_valid"]
+        if not verdict["resource_valid"]:
+            for fail in verdict["failures"]:
+                resource_findings[rec.weld_no].append(_finding(
+                    fail["code"], weld_no=rec.weld_no, nde_id=rec.nde_id,
+                    report_no=rec.report_no,
+                    evidence={
+                        "role": fail.get("role"),
+                        "target": fail.get("target"),
+                        "reason": fail.get("reason"),
+                        "period": verdict["period"],
+                        **{k: v for k, v in fail.items()
+                           if k not in ("code", "role", "target", "reason")},
+                    },
+                ))
+            # 显式剔除条款：该报告不得计入抽检、扩检和返修复检
+            resource_findings[rec.weld_no].append(_finding(
+                "NR-RECORD-EXCLUDED", weld_no=rec.weld_no, nde_id=rec.nde_id,
+                report_no=rec.report_no,
+                evidence={
+                    "report_no": rec.report_no,
+                    "period": verdict["period"],
+                    "reasons": sorted({f["code"] for f in verdict["failures"]}),
+                    "examiner_cert_no": rec.examiner_cert_no,
+                    "reviewer_cert_no": rec.reviewer_cert_no,
+                    "equipment": [
+                        {"equipment_id": e["equipment_id"], "version": e["version"],
+                         "role": e["role"]} for e in verdict["equipment"]
+                    ],
+                },
+            ))
 
     weld_results: dict[str, dict] = {}
     for weld in payload.welds:
         findings, links, ndes = _evaluate_weld(
-            weld, payload, wps_index, welder_index
+            weld, payload, wps_index, welder_index, nde_valid
         )
+        findings = resource_findings.get(weld.weld_no, []) + findings
         hold = any(f["severity"] == Severity.HOLD.value for f in findings)
         weld_results[weld.weld_no] = {
             "findings": findings,
@@ -647,10 +724,11 @@ def evaluate(payload: SubmissionPayload) -> dict:
         r["findings"].append(_finding("NDE-NONE", weld_no=weld.weld_no))
         r["hold"] = True
 
-    # 再核算检验批覆盖率与扩检（open reject 判定依赖最新 hold 集）
+    # 再核算检验批覆盖率与扩检（open reject 判定依赖最新 hold 集；
+    # 资源失效报告不计入口数，故必须传入 nde_valid）
     hold_welds = {no for no, r in weld_results.items() if r["hold"]}
     lot_per_weld, lot_summaries = _evaluate_lots(
-        payload, weld_index, hold_welds
+        payload, weld_index, hold_welds, nde_valid
     )
 
     # 批次 hold 会连带焊口 hold，汇总最终焊口结论
@@ -667,6 +745,7 @@ def evaluate(payload: SubmissionPayload) -> dict:
             "weld_no": weld.weld_no,
             "line_no": weld.line_no,
             "lot_id": weld.lot_id,
+            "product": weld.product,
             "welded_at": weld.welded_at,
             "material_groups": [weld.end_a.material_group,
                                 weld.end_b.material_group],
@@ -677,15 +756,28 @@ def evaluate(payload: SubmissionPayload) -> dict:
             ],
             "thickness_mm": weld_thicknesses(weld),
             "nde_count": len(base["ndes"]),
+            "nde_valid_count": sum(
+                1 for r in base["ndes"] if nde_valid.get(r.nde_id, True)
+            ),
+            "nde_excluded_count": sum(
+                1 for r in base["ndes"] if not nde_valid.get(r.nde_id, True)
+            ),
             "nde": [{
                 "nde_id": r.nde_id,
                 "method": r.method,
                 "result": r.result,
                 "iteration": r.iteration,
                 "examined_at": r.examined_at,
+                "started_at": r.period_start,
+                "finished_at": r.period_end,
                 "examiner": r.examiner,
                 "lot_id": r.lot_id,
                 "report_no": r.report_no,
+                "technique": r.technique,
+                "applied_thickness_mm": r.applied_thickness_mm,
+                "exposure_energy_kev": r.exposure_energy_kev,
+                "resource_valid": nde_valid.get(r.nde_id, True),
+                "resource": nde_resources.get(r.nde_id),
                 "coverage": [geo.band_dict(b) for b in r.coverage],
                 "defect_locations": [geo.band_dict(b) for b in r.defect_locations],
             } for r in sorted(base["ndes"],
@@ -722,6 +814,54 @@ def evaluate(payload: SubmissionPayload) -> dict:
                 if f["severity"] == Severity.WARNING.value
             ),
             "repairs_total": len(payload.repairs),
+            "nde_reports_total": len(payload.nde),
+            "nde_reports_excluded": sum(
+                1 for no, ok in nde_valid.items() if not ok
+            ),
+            "nde_personnel_total": len(payload.nde_personnel),
+            "nde_equipment_versions_total": len(payload.nde_equipment),
+        },
+        "nde_resources": {
+            "personnel": [
+                {
+                    "cert_no": c.cert_no, "name": c.name, "method": c.method,
+                    "level": c.level, "products": list(c.products),
+                    "techniques": list(c.techniques),
+                    "valid_from": c.valid_from.isoformat(),
+                    "valid_to": c.valid_to.isoformat(),
+                } for c in payload.nde_personnel
+            ],
+            "equipment": [
+                {
+                    "equipment_id": e.equipment_id, "version": e.version,
+                    "name": e.name, "kind": e.kind, "method": e.method,
+                    "serial_no": e.serial_no,
+                    "calibrated_from": e.calibrated_from.isoformat(),
+                    "calibrated_to": e.calibrated_to.isoformat(),
+                    "techniques": list(e.techniques),
+                    "range_min_mm": e.range_min_mm,
+                    "range_max_mm": e.range_max_mm,
+                    "energy_min_kev": e.energy_min_kev,
+                    "energy_max_kev": e.energy_max_kev,
+                    "source_isotope": e.source_isotope,
+                    "uses": [u.model_dump(mode="json") for u in e.uses],
+                } for e in payload.nde_equipment
+            ],
+            "invalid_reports": [
+                {
+                    "nde_id": rec.nde_id,
+                    "report_no": rec.report_no,
+                    "weld_no": rec.weld_no,
+                    "method": rec.method,
+                    "iteration": rec.iteration,
+                    "period": nde_resources[rec.nde_id]["period"],
+                    "reasons": sorted({
+                        f["code"]
+                        for f in nde_resources[rec.nde_id]["failures"]
+                    }),
+                }
+                for rec in payload.nde if not nde_valid.get(rec.nde_id, True)
+            ],
         },
         "lot_summaries": lot_summaries,
         "welds": weld_verdicts,

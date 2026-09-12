@@ -6,13 +6,13 @@
     "weld_hold": 10,
     "lot_total": 1,
     "lot_hold": 1,
-    "findings_total": 10,
-    "findings_hold": 10,
+    "findings_total": 14,
+    "findings_hold": 14,
     "findings_warning": 0,
-    "repairs_total": 1,
-    "nde_reports_total": 4,
-    "nde_reports_excluded": 0,
-    "nde_personnel_total": 2,
+    "repairs_total": 0,
+    "nde_reports_total": 2,
+    "nde_reports_excluded": 2,
+    "nde_personnel_total": 3,
     "nde_equipment_versions_total": 2
   },
   "nde_resources": {
@@ -30,7 +30,7 @@
           "digital"
         ],
         "valid_from": "2026-01-01T00:00:00+00:00",
-        "valid_to": "2026-12-31T23:59:59+00:00"
+        "valid_to": "2026-03-06T00:00:00+00:00"
       },
       {
         "cert_no": "NRT-II-LI",
@@ -46,6 +46,21 @@
         ],
         "valid_from": "2026-01-01T00:00:00+00:00",
         "valid_to": "2026-12-31T23:59:59+00:00"
+      },
+      {
+        "cert_no": "NRT-II-ZHANG-R2",
+        "name": "NDE-II-张",
+        "method": "RT",
+        "level": "II",
+        "products": [
+          "pressure_pipe"
+        ],
+        "techniques": [
+          "film",
+          "digital"
+        ],
+        "valid_from": "2026-03-06T00:00:00+00:00",
+        "valid_to": "2030-03-05T23:59:59+00:00"
       }
     ],
     "equipment": [
@@ -96,7 +111,36 @@
         "uses": []
       }
     ],
-    "invalid_reports": []
+    "invalid_reports": [
+      {
+        "nde_id": "N-001",
+        "report_no": "RT-2026-N-001",
+        "weld_no": "W-001",
+        "method": "RT",
+        "iteration": 0,
+        "period": {
+          "started_at": "2026-03-05T22:00:00+00:00",
+          "finished_at": "2026-03-06T02:00:00+00:00"
+        },
+        "reasons": [
+          "NR-CERT-EXPIRED"
+        ]
+      },
+      {
+        "nde_id": "N-002",
+        "report_no": "RT-2026-N-002",
+        "weld_no": "W-006",
+        "method": "RT",
+        "iteration": 0,
+        "period": {
+          "started_at": "2026-03-08T12:00:00+00:00",
+          "finished_at": "2026-03-08T14:00:00+00:00"
+        },
+        "reasons": [
+          "NR-EQUIP-MISSING"
+        ]
+      }
+    ]
   },
   "lot_summaries": [
     {
@@ -105,31 +149,44 @@
       "required_ratio": 0.2,
       "total_welds": 10,
       "required_initial": 2,
-      "examined_initial": 1,
-      "extended": true,
-      "extension_mode": "double",
-      "required_final": 4,
-      "examined_final": 3,
-      "final_ratio": 0.3,
-      "excluded_reports": [],
+      "examined_initial": 0,
+      "extended": false,
+      "extension_mode": null,
+      "required_final": 2,
+      "examined_final": 0,
+      "final_ratio": 0.0,
+      "excluded_reports": [
+        {
+          "nde_id": "N-001",
+          "report_no": "RT-2026-N-001",
+          "weld_no": "W-001",
+          "iteration": 0
+        },
+        {
+          "nde_id": "N-002",
+          "report_no": "RT-2026-N-002",
+          "weld_no": "W-006",
+          "iteration": 0
+        }
+      ],
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": null,
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
           }
         }
       ]
@@ -170,30 +227,30 @@
         8.18,
         8.18
       ],
-      "nde_count": 2,
-      "nde_valid_count": 2,
-      "nde_excluded_count": 0,
+      "nde_count": 1,
+      "nde_valid_count": 0,
+      "nde_excluded_count": 1,
       "nde": [
         {
           "nde_id": "N-001",
           "method": "RT",
-          "result": "reject",
+          "result": "accept",
           "iteration": 0,
-          "examined_at": "2026-03-02 14:00:00+00:00",
-          "started_at": "2026-03-02 12:00:00+00:00",
-          "finished_at": "2026-03-02 14:00:00+00:00",
+          "examined_at": "2026-03-06 02:00:00+00:00",
+          "started_at": "2026-03-05 22:00:00+00:00",
+          "finished_at": "2026-03-06 02:00:00+00:00",
           "examiner": "NDE-II-张",
           "lot_id": null,
           "report_no": "RT-2026-N-001",
           "technique": "film",
           "applied_thickness_mm": null,
           "exposure_energy_kev": 160.0,
-          "resource_valid": true,
+          "resource_valid": false,
           "resource": {
-            "resource_valid": true,
+            "resource_valid": false,
             "period": {
-              "started_at": "2026-03-02T12:00:00+00:00",
-              "finished_at": "2026-03-02T14:00:00+00:00"
+              "started_at": "2026-03-05T22:00:00+00:00",
+              "finished_at": "2026-03-06T02:00:00+00:00"
             },
             "examiner": {
               "cert_no": "NRT-II-ZHANG",
@@ -210,7 +267,7 @@
                   "digital"
                 ],
                 "valid_from": "2026-01-01T00:00:00+00:00",
-                "valid_to": "2026-12-31T23:59:59+00:00"
+                "valid_to": "2026-03-06T00:00:00+00:00"
               }
             },
             "reviewer": {
@@ -281,7 +338,18 @@
                 "uses": []
               }
             ],
-            "failures": []
+            "failures": [
+              {
+                "code": "NR-CERT-EXPIRED",
+                "role": "examiner",
+                "target": "NRT-II-ZHANG",
+                "reason": "证书有效期 2026-01-01T00:00:00+00:00 ~ 2026-03-06T00:00:00+00:00 未持续覆盖实施时段 2026-03-05T22:00:00+00:00 ~ 2026-03-06T02:00:00+00:00",
+                "valid_from": "2026-01-01T00:00:00+00:00",
+                "valid_to": "2026-03-06T00:00:00+00:00",
+                "period_start": "2026-03-05T22:00:00+00:00",
+                "period_end": "2026-03-06T02:00:00+00:00"
+              }
+            ]
           },
           "coverage": [
             {
@@ -290,183 +358,89 @@
               "end_deg": 360.0
             }
           ],
-          "defect_locations": [
-            {
-              "full_circle": false,
-              "start_deg": 300.0,
-              "end_deg": 340.0
-            }
-          ]
-        },
-        {
-          "nde_id": "N-051",
-          "method": "RT",
-          "result": "accept",
-          "iteration": 1,
-          "examined_at": "2026-03-06 14:00:00+00:00",
-          "started_at": "2026-03-06 12:00:00+00:00",
-          "finished_at": "2026-03-06 14:00:00+00:00",
-          "examiner": "NDE-II-张",
-          "lot_id": null,
-          "report_no": "RT-2026-N-051",
-          "technique": "film",
-          "applied_thickness_mm": null,
-          "exposure_energy_kev": 160.0,
-          "resource_valid": true,
-          "resource": {
-            "resource_valid": true,
-            "period": {
-              "started_at": "2026-03-06T12:00:00+00:00",
-              "finished_at": "2026-03-06T14:00:00+00:00"
-            },
-            "examiner": {
-              "cert_no": "NRT-II-ZHANG",
-              "cert": {
-                "cert_no": "NRT-II-ZHANG",
-                "name": "NDE-II-张",
-                "method": "RT",
-                "level": "II",
-                "products": [
-                  "pressure_pipe"
-                ],
-                "techniques": [
-                  "film",
-                  "digital"
-                ],
-                "valid_from": "2026-01-01T00:00:00+00:00",
-                "valid_to": "2026-12-31T23:59:59+00:00"
-              }
-            },
-            "reviewer": {
-              "cert_no": "NRT-II-LI",
-              "cert": {
-                "cert_no": "NRT-II-LI",
-                "name": "NDE-II-李",
-                "method": "RT",
-                "level": "II",
-                "products": [
-                  "pressure_pipe"
-                ],
-                "techniques": [
-                  "film",
-                  "digital"
-                ],
-                "valid_from": "2026-01-01T00:00:00+00:00",
-                "valid_to": "2026-12-31T23:59:59+00:00"
-              }
-            },
-            "equipment": [
-              {
-                "equipment_id": "XR-250",
-                "version": "2026A",
-                "role": "main",
-                "name": "250kV 便携式 X 射线机",
-                "kind": "xray_source",
-                "method": "RT",
-                "serial_no": "SN-XR-250-07",
-                "calibrated_from": "2026-01-01T00:00:00+00:00",
-                "calibrated_to": "2026-12-31T23:59:59+00:00",
-                "techniques": [
-                  "film",
-                  "digital"
-                ],
-                "range_min_mm": null,
-                "range_max_mm": null,
-                "energy_min_kev": 20.0,
-                "energy_max_kev": 250.0,
-                "source_isotope": null,
-                "uses": [
-                  {
-                    "equipment_id": "FILM-T2",
-                    "version": "2026A",
-                    "role": "film"
-                  }
-                ]
-              },
-              {
-                "equipment_id": "FILM-T2",
-                "version": "2026A",
-                "role": "accessory",
-                "name": "工业射线胶片 T2",
-                "kind": "film",
-                "method": "RT",
-                "serial_no": "SN-FILM-T2",
-                "calibrated_from": "2026-01-01T00:00:00+00:00",
-                "calibrated_to": "2026-12-31T23:59:59+00:00",
-                "techniques": [
-                  "film",
-                  "digital"
-                ],
-                "range_min_mm": null,
-                "range_max_mm": null,
-                "energy_min_kev": null,
-                "energy_max_kev": null,
-                "source_isotope": null,
-                "uses": []
-              }
-            ],
-            "failures": []
-          },
-          "coverage": [
-            {
-              "full_circle": false,
-              "start_deg": 280.0,
-              "end_deg": 355.0
-            }
-          ],
           "defect_locations": []
         }
       ],
-      "repairs": [
-        {
-          "iteration": 1,
-          "repair_id": "R-001",
-          "repaired_at": "2026-03-05 10:00:00+00:00",
-          "wps_no": "WPS-101",
-          "welder_id": "W-001",
-          "approved": true,
-          "excavated_band": {
-            "full_circle": false,
-            "start_deg": 295.0,
-            "end_deg": 345.0
-          },
-          "reinspections": [
-            {
-              "nde_id": "N-051",
-              "method": "RT",
-              "result": "accept",
-              "examined_at": "2026-03-06T14:00:00+00:00",
-              "coverage": [
-                {
-                  "full_circle": false,
-                  "start_deg": 280.0,
-                  "end_deg": 355.0
-                }
-              ],
-              "report_no": "RT-2026-N-051"
-            }
-          ],
-          "closed": true
-        }
-      ],
+      "repairs": [],
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": "W-001",
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
+          }
+        },
+        {
+          "code": "NR-CERT-EXPIRED",
+          "severity": "hold",
+          "category": "nde",
+          "reference": "TSG Z8001：证书应在有效期内实施检测；跨到期点的夜班时段不得整体采信",
+          "message": "人员证书未在整个检测实施时段内持续有效（时段跨过到期点或检测时证书尚未生效）",
+          "weld_no": "W-001",
+          "lot_id": null,
+          "nde_id": "N-001",
+          "repair_id": null,
+          "report_no": "RT-2026-N-001",
+          "evidence": {
+            "role": "examiner",
+            "target": "NRT-II-ZHANG",
+            "reason": "证书有效期 2026-01-01T00:00:00+00:00 ~ 2026-03-06T00:00:00+00:00 未持续覆盖实施时段 2026-03-05T22:00:00+00:00 ~ 2026-03-06T02:00:00+00:00",
+            "period": {
+              "started_at": "2026-03-05T22:00:00+00:00",
+              "finished_at": "2026-03-06T02:00:00+00:00"
+            },
+            "valid_from": "2026-01-01T00:00:00+00:00",
+            "valid_to": "2026-03-06T00:00:00+00:00",
+            "period_start": "2026-03-05T22:00:00+00:00",
+            "period_end": "2026-03-06T02:00:00+00:00"
+          }
+        },
+        {
+          "code": "NR-RECORD-EXCLUDED",
+          "severity": "hold",
+          "category": "nde",
+          "reference": "质量记录完整性：人员资格或设备状态在检测当时无效的报告不得计入抽检、扩检与返修复检",
+          "message": "该检测报告因 NDT 资源核验未通过，已从抽检/扩检/返修复检计数中剔除（同一张底片不能既覆盖焊缝又覆盖资源资格）",
+          "weld_no": "W-001",
+          "lot_id": null,
+          "nde_id": "N-001",
+          "repair_id": null,
+          "report_no": "RT-2026-N-001",
+          "evidence": {
+            "report_no": "RT-2026-N-001",
+            "period": {
+              "started_at": "2026-03-05T22:00:00+00:00",
+              "finished_at": "2026-03-06T02:00:00+00:00"
+            },
+            "reasons": [
+              "NR-CERT-EXPIRED"
+            ],
+            "examiner_cert_no": "NRT-II-ZHANG",
+            "reviewer_cert_no": "NRT-II-LI",
+            "equipment": [
+              {
+                "equipment_id": "XR-250",
+                "version": "2026A",
+                "role": "main"
+              },
+              {
+                "equipment_id": "FILM-T2",
+                "version": "2026A",
+                "role": "accessory"
+              }
+            ]
           }
         }
       ]
@@ -505,148 +479,29 @@
         8.18,
         8.18
       ],
-      "nde_count": 1,
-      "nde_valid_count": 1,
+      "nde_count": 0,
+      "nde_valid_count": 0,
       "nde_excluded_count": 0,
-      "nde": [
-        {
-          "nde_id": "N-101",
-          "method": "RT",
-          "result": "accept",
-          "iteration": 0,
-          "examined_at": "2026-03-16 14:00:00+00:00",
-          "started_at": "2026-03-16 12:00:00+00:00",
-          "finished_at": "2026-03-16 14:00:00+00:00",
-          "examiner": "NDE-II-张",
-          "lot_id": null,
-          "report_no": "RT-2026-N-101",
-          "technique": "film",
-          "applied_thickness_mm": null,
-          "exposure_energy_kev": 160.0,
-          "resource_valid": true,
-          "resource": {
-            "resource_valid": true,
-            "period": {
-              "started_at": "2026-03-16T12:00:00+00:00",
-              "finished_at": "2026-03-16T14:00:00+00:00"
-            },
-            "examiner": {
-              "cert_no": "NRT-II-ZHANG",
-              "cert": {
-                "cert_no": "NRT-II-ZHANG",
-                "name": "NDE-II-张",
-                "method": "RT",
-                "level": "II",
-                "products": [
-                  "pressure_pipe"
-                ],
-                "techniques": [
-                  "film",
-                  "digital"
-                ],
-                "valid_from": "2026-01-01T00:00:00+00:00",
-                "valid_to": "2026-12-31T23:59:59+00:00"
-              }
-            },
-            "reviewer": {
-              "cert_no": "NRT-II-LI",
-              "cert": {
-                "cert_no": "NRT-II-LI",
-                "name": "NDE-II-李",
-                "method": "RT",
-                "level": "II",
-                "products": [
-                  "pressure_pipe"
-                ],
-                "techniques": [
-                  "film",
-                  "digital"
-                ],
-                "valid_from": "2026-01-01T00:00:00+00:00",
-                "valid_to": "2026-12-31T23:59:59+00:00"
-              }
-            },
-            "equipment": [
-              {
-                "equipment_id": "XR-250",
-                "version": "2026A",
-                "role": "main",
-                "name": "250kV 便携式 X 射线机",
-                "kind": "xray_source",
-                "method": "RT",
-                "serial_no": "SN-XR-250-07",
-                "calibrated_from": "2026-01-01T00:00:00+00:00",
-                "calibrated_to": "2026-12-31T23:59:59+00:00",
-                "techniques": [
-                  "film",
-                  "digital"
-                ],
-                "range_min_mm": null,
-                "range_max_mm": null,
-                "energy_min_kev": 20.0,
-                "energy_max_kev": 250.0,
-                "source_isotope": null,
-                "uses": [
-                  {
-                    "equipment_id": "FILM-T2",
-                    "version": "2026A",
-                    "role": "film"
-                  }
-                ]
-              },
-              {
-                "equipment_id": "FILM-T2",
-                "version": "2026A",
-                "role": "accessory",
-                "name": "工业射线胶片 T2",
-                "kind": "film",
-                "method": "RT",
-                "serial_no": "SN-FILM-T2",
-                "calibrated_from": "2026-01-01T00:00:00+00:00",
-                "calibrated_to": "2026-12-31T23:59:59+00:00",
-                "techniques": [
-                  "film",
-                  "digital"
-                ],
-                "range_min_mm": null,
-                "range_max_mm": null,
-                "energy_min_kev": null,
-                "energy_max_kev": null,
-                "source_isotope": null,
-                "uses": []
-              }
-            ],
-            "failures": []
-          },
-          "coverage": [
-            {
-              "full_circle": true,
-              "start_deg": 0.0,
-              "end_deg": 360.0
-            }
-          ],
-          "defect_locations": []
-        }
-      ],
+      "nde": [],
       "repairs": [],
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": "W-002",
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
           }
         }
       ]
@@ -693,21 +548,21 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": "W-003",
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
           }
         }
       ]
@@ -754,21 +609,21 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": "W-004",
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
           }
         }
       ]
@@ -815,21 +670,21 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": "W-005",
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
           }
         }
       ]
@@ -869,8 +724,8 @@
         8.18
       ],
       "nde_count": 1,
-      "nde_valid_count": 1,
-      "nde_excluded_count": 0,
+      "nde_valid_count": 0,
+      "nde_excluded_count": 1,
       "nde": [
         {
           "nde_id": "N-002",
@@ -886,17 +741,17 @@
           "technique": "film",
           "applied_thickness_mm": null,
           "exposure_energy_kev": 160.0,
-          "resource_valid": true,
+          "resource_valid": false,
           "resource": {
-            "resource_valid": true,
+            "resource_valid": false,
             "period": {
               "started_at": "2026-03-08T12:00:00+00:00",
               "finished_at": "2026-03-08T14:00:00+00:00"
             },
             "examiner": {
-              "cert_no": "NRT-II-ZHANG",
+              "cert_no": "NRT-II-ZHANG-R2",
               "cert": {
-                "cert_no": "NRT-II-ZHANG",
+                "cert_no": "NRT-II-ZHANG-R2",
                 "name": "NDE-II-张",
                 "method": "RT",
                 "level": "II",
@@ -907,8 +762,8 @@
                   "film",
                   "digital"
                 ],
-                "valid_from": "2026-01-01T00:00:00+00:00",
-                "valid_to": "2026-12-31T23:59:59+00:00"
+                "valid_from": "2026-03-06T00:00:00+00:00",
+                "valid_to": "2030-03-05T23:59:59+00:00"
               }
             },
             "reviewer": {
@@ -929,57 +784,15 @@
                 "valid_to": "2026-12-31T23:59:59+00:00"
               }
             },
-            "equipment": [
+            "equipment": [],
+            "failures": [
               {
-                "equipment_id": "XR-250",
-                "version": "2026A",
+                "code": "NR-EQUIP-MISSING",
                 "role": "main",
-                "name": "250kV 便携式 X 射线机",
-                "kind": "xray_source",
-                "method": "RT",
-                "serial_no": "SN-XR-250-07",
-                "calibrated_from": "2026-01-01T00:00:00+00:00",
-                "calibrated_to": "2026-12-31T23:59:59+00:00",
-                "techniques": [
-                  "film",
-                  "digital"
-                ],
-                "range_min_mm": null,
-                "range_max_mm": null,
-                "energy_min_kev": 20.0,
-                "energy_max_kev": 250.0,
-                "source_isotope": null,
-                "uses": [
-                  {
-                    "equipment_id": "FILM-T2",
-                    "version": "2026A",
-                    "role": "film"
-                  }
-                ]
-              },
-              {
-                "equipment_id": "FILM-T2",
-                "version": "2026A",
-                "role": "accessory",
-                "name": "工业射线胶片 T2",
-                "kind": "film",
-                "method": "RT",
-                "serial_no": "SN-FILM-T2",
-                "calibrated_from": "2026-01-01T00:00:00+00:00",
-                "calibrated_to": "2026-12-31T23:59:59+00:00",
-                "techniques": [
-                  "film",
-                  "digital"
-                ],
-                "range_min_mm": null,
-                "range_max_mm": null,
-                "energy_min_kev": null,
-                "energy_max_kev": null,
-                "source_isotope": null,
-                "uses": []
+                "target": "XR-250@2026B",
+                "reason": "设备版本 XR-250@2026B 未登记（引用缺失）"
               }
-            ],
-            "failures": []
+            ]
           },
           "coverage": [
             {
@@ -995,21 +808,67 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": "W-006",
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
+          }
+        },
+        {
+          "code": "NR-EQUIP-MISSING",
+          "severity": "hold",
+          "category": "nde",
+          "reference": "质量记录完整性：检测报告应可追溯所用设备的具体校准版本",
+          "message": "检测记录引用的设备版本（或其关键附件版本）未登记（引用缺失）",
+          "weld_no": "W-006",
+          "lot_id": null,
+          "nde_id": "N-002",
+          "repair_id": null,
+          "report_no": "RT-2026-N-002",
+          "evidence": {
+            "role": "main",
+            "target": "XR-250@2026B",
+            "reason": "设备版本 XR-250@2026B 未登记（引用缺失）",
+            "period": {
+              "started_at": "2026-03-08T12:00:00+00:00",
+              "finished_at": "2026-03-08T14:00:00+00:00"
+            }
+          }
+        },
+        {
+          "code": "NR-RECORD-EXCLUDED",
+          "severity": "hold",
+          "category": "nde",
+          "reference": "质量记录完整性：人员资格或设备状态在检测当时无效的报告不得计入抽检、扩检与返修复检",
+          "message": "该检测报告因 NDT 资源核验未通过，已从抽检/扩检/返修复检计数中剔除（同一张底片不能既覆盖焊缝又覆盖资源资格）",
+          "weld_no": "W-006",
+          "lot_id": null,
+          "nde_id": "N-002",
+          "repair_id": null,
+          "report_no": "RT-2026-N-002",
+          "evidence": {
+            "report_no": "RT-2026-N-002",
+            "period": {
+              "started_at": "2026-03-08T12:00:00+00:00",
+              "finished_at": "2026-03-08T14:00:00+00:00"
+            },
+            "reasons": [
+              "NR-EQUIP-MISSING"
+            ],
+            "examiner_cert_no": "NRT-II-ZHANG-R2",
+            "reviewer_cert_no": "NRT-II-LI",
+            "equipment": []
           }
         }
       ]
@@ -1056,21 +915,21 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": "W-007",
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
           }
         }
       ]
@@ -1117,21 +976,21 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": "W-008",
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
           }
         }
       ]
@@ -1178,21 +1037,21 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": "W-009",
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
           }
         }
       ]
@@ -1239,21 +1098,21 @@
       "decision": "hold",
       "findings": [
         {
-          "code": "LT-EXTENSION-INSUFFICIENT",
+          "code": "LT-SAMPLE-INSUFFICIENT",
           "severity": "hold",
           "category": "lot",
-          "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-          "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+          "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+          "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
           "weld_no": "W-010",
           "lot_id": "LOT-A",
           "nde_id": null,
           "repair_id": null,
           "report_no": null,
           "evidence": {
-            "mode": "double",
-            "required_final": 4,
-            "examined_final": 3,
-            "first_reject_at": "2026-03-02T14:00:00+00:00"
+            "required_initial": 2,
+            "examined": 0,
+            "ratio_required": 0.2,
+            "ratio_actual": 0.0
           }
         }
       ]
@@ -1261,188 +1120,298 @@
   ],
   "findings": [
     {
-      "code": "LT-EXTENSION-INSUFFICIENT",
+      "code": "LT-SAMPLE-INSUFFICIENT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-      "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
       "weld_no": "W-001",
       "lot_id": "LOT-A",
       "nde_id": null,
       "repair_id": null,
       "report_no": null,
       "evidence": {
-        "mode": "double",
-        "required_final": 4,
-        "examined_final": 3,
-        "first_reject_at": "2026-03-02T14:00:00+00:00"
+        "required_initial": 2,
+        "examined": 0,
+        "ratio_required": 0.2,
+        "ratio_actual": 0.0
       }
     },
     {
-      "code": "LT-EXTENSION-INSUFFICIENT",
+      "code": "NR-CERT-EXPIRED",
+      "severity": "hold",
+      "category": "nde",
+      "reference": "TSG Z8001：证书应在有效期内实施检测；跨到期点的夜班时段不得整体采信",
+      "message": "人员证书未在整个检测实施时段内持续有效（时段跨过到期点或检测时证书尚未生效）",
+      "weld_no": "W-001",
+      "lot_id": null,
+      "nde_id": "N-001",
+      "repair_id": null,
+      "report_no": "RT-2026-N-001",
+      "evidence": {
+        "role": "examiner",
+        "target": "NRT-II-ZHANG",
+        "reason": "证书有效期 2026-01-01T00:00:00+00:00 ~ 2026-03-06T00:00:00+00:00 未持续覆盖实施时段 2026-03-05T22:00:00+00:00 ~ 2026-03-06T02:00:00+00:00",
+        "period": {
+          "started_at": "2026-03-05T22:00:00+00:00",
+          "finished_at": "2026-03-06T02:00:00+00:00"
+        },
+        "valid_from": "2026-01-01T00:00:00+00:00",
+        "valid_to": "2026-03-06T00:00:00+00:00",
+        "period_start": "2026-03-05T22:00:00+00:00",
+        "period_end": "2026-03-06T02:00:00+00:00"
+      }
+    },
+    {
+      "code": "NR-RECORD-EXCLUDED",
+      "severity": "hold",
+      "category": "nde",
+      "reference": "质量记录完整性：人员资格或设备状态在检测当时无效的报告不得计入抽检、扩检与返修复检",
+      "message": "该检测报告因 NDT 资源核验未通过，已从抽检/扩检/返修复检计数中剔除（同一张底片不能既覆盖焊缝又覆盖资源资格）",
+      "weld_no": "W-001",
+      "lot_id": null,
+      "nde_id": "N-001",
+      "repair_id": null,
+      "report_no": "RT-2026-N-001",
+      "evidence": {
+        "report_no": "RT-2026-N-001",
+        "period": {
+          "started_at": "2026-03-05T22:00:00+00:00",
+          "finished_at": "2026-03-06T02:00:00+00:00"
+        },
+        "reasons": [
+          "NR-CERT-EXPIRED"
+        ],
+        "examiner_cert_no": "NRT-II-ZHANG",
+        "reviewer_cert_no": "NRT-II-LI",
+        "equipment": [
+          {
+            "equipment_id": "XR-250",
+            "version": "2026A",
+            "role": "main"
+          },
+          {
+            "equipment_id": "FILM-T2",
+            "version": "2026A",
+            "role": "accessory"
+          }
+        ]
+      }
+    },
+    {
+      "code": "LT-SAMPLE-INSUFFICIENT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-      "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
       "weld_no": "W-002",
       "lot_id": "LOT-A",
       "nde_id": null,
       "repair_id": null,
       "report_no": null,
       "evidence": {
-        "mode": "double",
-        "required_final": 4,
-        "examined_final": 3,
-        "first_reject_at": "2026-03-02T14:00:00+00:00"
+        "required_initial": 2,
+        "examined": 0,
+        "ratio_required": 0.2,
+        "ratio_actual": 0.0
       }
     },
     {
-      "code": "LT-EXTENSION-INSUFFICIENT",
+      "code": "LT-SAMPLE-INSUFFICIENT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-      "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
       "weld_no": "W-003",
       "lot_id": "LOT-A",
       "nde_id": null,
       "repair_id": null,
       "report_no": null,
       "evidence": {
-        "mode": "double",
-        "required_final": 4,
-        "examined_final": 3,
-        "first_reject_at": "2026-03-02T14:00:00+00:00"
+        "required_initial": 2,
+        "examined": 0,
+        "ratio_required": 0.2,
+        "ratio_actual": 0.0
       }
     },
     {
-      "code": "LT-EXTENSION-INSUFFICIENT",
+      "code": "LT-SAMPLE-INSUFFICIENT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-      "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
       "weld_no": "W-004",
       "lot_id": "LOT-A",
       "nde_id": null,
       "repair_id": null,
       "report_no": null,
       "evidence": {
-        "mode": "double",
-        "required_final": 4,
-        "examined_final": 3,
-        "first_reject_at": "2026-03-02T14:00:00+00:00"
+        "required_initial": 2,
+        "examined": 0,
+        "ratio_required": 0.2,
+        "ratio_actual": 0.0
       }
     },
     {
-      "code": "LT-EXTENSION-INSUFFICIENT",
+      "code": "LT-SAMPLE-INSUFFICIENT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-      "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
       "weld_no": "W-005",
       "lot_id": "LOT-A",
       "nde_id": null,
       "repair_id": null,
       "report_no": null,
       "evidence": {
-        "mode": "double",
-        "required_final": 4,
-        "examined_final": 3,
-        "first_reject_at": "2026-03-02T14:00:00+00:00"
+        "required_initial": 2,
+        "examined": 0,
+        "ratio_required": 0.2,
+        "ratio_actual": 0.0
       }
     },
     {
-      "code": "LT-EXTENSION-INSUFFICIENT",
+      "code": "LT-SAMPLE-INSUFFICIENT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-      "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
       "weld_no": "W-006",
       "lot_id": "LOT-A",
       "nde_id": null,
       "repair_id": null,
       "report_no": null,
       "evidence": {
-        "mode": "double",
-        "required_final": 4,
-        "examined_final": 3,
-        "first_reject_at": "2026-03-02T14:00:00+00:00"
+        "required_initial": 2,
+        "examined": 0,
+        "ratio_required": 0.2,
+        "ratio_actual": 0.0
       }
     },
     {
-      "code": "LT-EXTENSION-INSUFFICIENT",
+      "code": "NR-EQUIP-MISSING",
+      "severity": "hold",
+      "category": "nde",
+      "reference": "质量记录完整性：检测报告应可追溯所用设备的具体校准版本",
+      "message": "检测记录引用的设备版本（或其关键附件版本）未登记（引用缺失）",
+      "weld_no": "W-006",
+      "lot_id": null,
+      "nde_id": "N-002",
+      "repair_id": null,
+      "report_no": "RT-2026-N-002",
+      "evidence": {
+        "role": "main",
+        "target": "XR-250@2026B",
+        "reason": "设备版本 XR-250@2026B 未登记（引用缺失）",
+        "period": {
+          "started_at": "2026-03-08T12:00:00+00:00",
+          "finished_at": "2026-03-08T14:00:00+00:00"
+        }
+      }
+    },
+    {
+      "code": "NR-RECORD-EXCLUDED",
+      "severity": "hold",
+      "category": "nde",
+      "reference": "质量记录完整性：人员资格或设备状态在检测当时无效的报告不得计入抽检、扩检与返修复检",
+      "message": "该检测报告因 NDT 资源核验未通过，已从抽检/扩检/返修复检计数中剔除（同一张底片不能既覆盖焊缝又覆盖资源资格）",
+      "weld_no": "W-006",
+      "lot_id": null,
+      "nde_id": "N-002",
+      "repair_id": null,
+      "report_no": "RT-2026-N-002",
+      "evidence": {
+        "report_no": "RT-2026-N-002",
+        "period": {
+          "started_at": "2026-03-08T12:00:00+00:00",
+          "finished_at": "2026-03-08T14:00:00+00:00"
+        },
+        "reasons": [
+          "NR-EQUIP-MISSING"
+        ],
+        "examiner_cert_no": "NRT-II-ZHANG-R2",
+        "reviewer_cert_no": "NRT-II-LI",
+        "equipment": []
+      }
+    },
+    {
+      "code": "LT-SAMPLE-INSUFFICIENT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-      "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
       "weld_no": "W-007",
       "lot_id": "LOT-A",
       "nde_id": null,
       "repair_id": null,
       "report_no": null,
       "evidence": {
-        "mode": "double",
-        "required_final": 4,
-        "examined_final": 3,
-        "first_reject_at": "2026-03-02T14:00:00+00:00"
+        "required_initial": 2,
+        "examined": 0,
+        "ratio_required": 0.2,
+        "ratio_actual": 0.0
       }
     },
     {
-      "code": "LT-EXTENSION-INSUFFICIENT",
+      "code": "LT-SAMPLE-INSUFFICIENT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-      "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
       "weld_no": "W-008",
       "lot_id": "LOT-A",
       "nde_id": null,
       "repair_id": null,
       "report_no": null,
       "evidence": {
-        "mode": "double",
-        "required_final": 4,
-        "examined_final": 3,
-        "first_reject_at": "2026-03-02T14:00:00+00:00"
+        "required_initial": 2,
+        "examined": 0,
+        "ratio_required": 0.2,
+        "ratio_actual": 0.0
       }
     },
     {
-      "code": "LT-EXTENSION-INSUFFICIENT",
+      "code": "LT-SAMPLE-INSUFFICIENT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-      "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
       "weld_no": "W-009",
       "lot_id": "LOT-A",
       "nde_id": null,
       "repair_id": null,
       "report_no": null,
       "evidence": {
-        "mode": "double",
-        "required_final": 4,
-        "examined_final": 3,
-        "first_reject_at": "2026-03-02T14:00:00+00:00"
+        "required_initial": 2,
+        "examined": 0,
+        "ratio_required": 0.2,
+        "ratio_actual": 0.0
       }
     },
     {
-      "code": "LT-EXTENSION-INSUFFICIENT",
+      "code": "LT-SAMPLE-INSUFFICIENT",
       "severity": "hold",
       "category": "lot",
-      "reference": "GB/T 20801：抽检发现不合格应按规定扩检（加倍/100%）",
-      "message": "抽检失败后扩检数量不足：达到扩检规则要求前焊口保持 hold",
+      "reference": "GB/T 20801：检验批实际抽检比例不得低于规定比例",
+      "message": "检验批抽检数量不足，实际覆盖率低于规定抽检比例",
       "weld_no": "W-010",
       "lot_id": "LOT-A",
       "nde_id": null,
       "repair_id": null,
       "report_no": null,
       "evidence": {
-        "mode": "double",
-        "required_final": 4,
-        "examined_final": 3,
-        "first_reject_at": "2026-03-02T14:00:00+00:00"
+        "required_initial": 2,
+        "examined": 0,
+        "ratio_required": 0.2,
+        "ratio_actual": 0.0
       }
     }
   ],
   "clauses_triggered": [
-    "LT-EXTENSION-INSUFFICIENT"
+    "LT-SAMPLE-INSUFFICIENT",
+    "NR-CERT-EXPIRED",
+    "NR-EQUIP-MISSING",
+    "NR-RECORD-EXCLUDED"
   ],
-  "evaluated_at": "2026-09-12 11:07:31.921997+00:00"
+  "evaluated_at": "2026-09-12 11:07:31.942459+00:00"
 }

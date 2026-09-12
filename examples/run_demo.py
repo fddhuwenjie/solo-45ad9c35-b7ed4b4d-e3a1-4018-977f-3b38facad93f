@@ -18,6 +18,7 @@ from examples.sample_data import (
     direct_release_payload,
     double_repair_payload,
     extension_payload,
+    ndt_resource_failure_payload,
 )
 
 SCENARIOS = [
@@ -28,6 +29,8 @@ SCENARIOS = [
     ("3-double-repair", "二次返修闭合放行", double_repair_payload),
     ("3b-repair-uncovered", "二次复检未覆盖挖补区（hold 对照）",
      lambda: double_repair_payload(second_covered=False)),
+    ("4-ndt-resource", "夜班跨证书到期点/未校准设备（报告剔除 hold）",
+     ndt_resource_failure_payload),
 ]
 
 
@@ -55,6 +58,14 @@ def main() -> None:
                   f"{lot['decision']}")
         codes = result["clauses_triggered"]
         print("  触发条款:", "、".join(codes) if codes else "无")
+        invalid = result["nde_resources"]["invalid_reports"]
+        if invalid:
+            print("  剔除报告（不得计入抽检/扩检/复检）:")
+            for item in invalid:
+                print(f"    {item['nde_id']} ({item['report_no']}) "
+                      f"焊口 {item['weld_no']}  时段 {item['period']['started_at']} "
+                      f"~ {item['period']['finished_at']}  原因: "
+                      f"{'、'.join(item['reasons'])}")
         for w in result["welds"]:
             if w["decision"] == "hold":
                 detail = sorted({f["code"] for f in w["findings"]})

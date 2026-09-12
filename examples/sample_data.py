@@ -7,10 +7,15 @@
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.schemas import (
     AngleBand,
     HeatEnd,
     LotRule,
+    NdeEquipmentUse,
+    NdeEquipmentVersion,
+    NdePersonnelCert,
     NdeRecord,
     RepairRecord,
     SubmissionPayload,
@@ -20,6 +25,69 @@ from app.schemas import (
 )
 
 GROUP = "Fe-1"
+
+
+# ============================================================ NDT 资源（默认有效）
+#
+# 默认样例：RT-II 张工 实施、RT-II 李工 复核；X 射线机 XR-250 配胶片包
+# FILM-T2，校准与证书均覆盖 2026 全年。夜班跨到期点等失效场景在测试中构造。
+
+
+def ndt_cert(no: str, name: str, method: str = "RT", level: str = "II",
+             *, products=("pressure_pipe",),
+             techniques=("film", "digital"),
+             valid_from="2026-01-01T00:00:00Z",
+             valid_to="2026-12-31T23:59:59Z"):
+    return NdePersonnelCert(
+        cert_no=no, name=name, method=method, level=level,
+        products=list(products), techniques=list(techniques),
+        valid_from=valid_from, valid_to=valid_to,
+    )
+
+
+def ndt_equipment(eid: str, version: str, name: str, kind: str,
+                  method: str = "RT", *, serial: str | None = None,
+                  calibrated_from="2026-01-01T00:00:00Z",
+                  calibrated_to="2026-12-31T23:59:59Z",
+                  techniques=("film", "digital"),
+                  range_min=None, range_max=None,
+                  energy_min=20.0, energy_max=250.0,
+                  isotope=None, uses=()):
+    return NdeEquipmentVersion(
+        equipment_id=eid, version=version, name=name, kind=kind,
+        method=method, serial_no=serial or f"SN-{eid}",
+        calibrated_from=calibrated_from, calibrated_to=calibrated_to,
+        techniques=list(techniques),
+        range_min_mm=range_min, range_max_mm=range_max,
+        energy_min_kev=energy_min, energy_max_kev=energy_max,
+        source_isotope=isotope,
+        uses=[NdeEquipmentUse(**u) for u in uses],
+    )
+
+
+def default_personnel():
+    """两张不同证号的 RT-II 证书（实施/复核不可同人）。"""
+    return [
+        ndt_cert("NRT-II-ZHANG", "NDE-II-张"),
+        ndt_cert("NRT-II-LI", "NDE-II-李"),
+    ]
+
+
+def default_equipment():
+    """X 射线机（主设备）+ T2 胶片包（关键附件）。"""
+    film = ndt_equipment("FILM-T2", "2026A", "工业射线胶片 T2", "film",
+                         serial="SN-FILM-T2",
+                         energy_min=None, energy_max=None)
+    xray = ndt_equipment(
+        "XR-250", "2026A", "250kV 便携式 X 射线机", "xray_source",
+        serial="SN-XR-250-07", energy_min=20.0, energy_max=250.0,
+        uses=[{"equipment_id": "FILM-T2", "version": "2026A", "role": "film"}],
+    )
+    return [xray, film]
+
+
+def default_rt_uses():
+    return [NdeEquipmentUse(equipment_id="XR-250", version="2026A", role="main")]
 
 
 def wps(no: str = "WPS-101", groups=("Fe-1",), tmin=3.0, tmax=20.0,
@@ -89,14 +157,44 @@ def weld(no: str, heat_a: str, heat_b: str, *, day: int = 1,
 
 def rt(no: str, weld_no: str, result: str, *, day: int, hour=14,
        bands=((0, 360),), defects=(), iteration=0, lot_id=None,
-       method="RT", full=False, examiner="NDE-II-张"):
+       method="RT", full=False, examiner="NDE-II-张",
+       examiner_cert="NRT-II-ZHANG", reviewer_cert="NRT-II-LI",
+       equipment_uses=None, technique="film",
+       applied_thickness_mm=None, exposure_energy_kev=160.0,
+       duration_hours=2, start_hour=None, start_day=None):
+    """RT 检测单工厂；默认资源（人员证书/设备版本）全年有效。
+
+    duration_hours>0 时生成 [examined-duration, examined] 的实施时段，
+    start_hour/start_day 可显式指定跨零点夜班的起点。
+    """
+    examined = f"2026-03-{day:02d}T{hour:02d}:00:00Z"
+    if start_hour is not None:
+        sday = start_day if start_day is not None else day
+        started = f"2026-03-{sday:02d}T{start_hour:02d}:00:00Z"
+    elif duration_hours:
+        from datetime import datetime, timedelta, timezone
+        t0 = datetime.strptime(examined, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc) - timedelta(hours=duration_hours)
+        started = t0.strftime("%Y-%m-%dT%H:%M:%SZ")
+    else:
+        started = examined
+    uses = equipment_uses if equipment_uses is not None else (
+        default_rt_uses() if method == "RT" else [])
     return NdeRecord(
         nde_id=no,
         weld_no=weld_no,
         method=method,
         result=result,
-        examined_at=f"2026-03-{day:02d}T{hour:02d}:00:00Z",
+        examined_at=examined,
+        started_at=started,
+        finished_at=examined,
         examiner=examiner,
+        examiner_cert_no=examiner_cert,
+        reviewer_cert_no=reviewer_cert,
+        equipment_uses=uses,
+        technique=technique,
+        applied_thickness_mm=applied_thickness_mm,
+        exposure_energy_kev=exposure_energy_kev if method == "RT" else None,
         lot_id=lot_id,
         coverage=[
             AngleBand(start_deg=a, end_deg=b, full_circle=full)
@@ -156,6 +254,8 @@ def direct_release_payload() -> SubmissionPayload:
         submitted_by="质检员-王",
         wps=[wps()],
         welders=[welder()],
+        nde_personnel=default_personnel(),
+        nde_equipment=default_equipment(),
         welds=welds,
         nde=ndes,
         repairs=[],
@@ -203,6 +303,8 @@ def extension_payload(*, enough_extension: bool = True) -> SubmissionPayload:
         submitted_by="质检员-王",
         wps=[wps()],
         welders=[welder()],
+        nde_personnel=default_personnel(),
+        nde_equipment=default_equipment(),
         welds=welds,
         nde=ndes,
         repairs=repairs,
@@ -246,8 +348,58 @@ def double_repair_payload(*, second_covered: bool = True) -> SubmissionPayload:
         submitted_by="质检员-赵",
         wps=[wps()],
         welders=[welder()],
+        nde_personnel=default_personnel(),
+        nde_equipment=default_equipment(),
         welds=welds,
         nde=ndes,
         repairs=repairs,
         lot_rules=[lot(rule_id="LOT-B", ratio=1.0, on_reject="full")],
+    )
+
+
+# ============================================================ 场景四：NDT 资源失效
+
+
+def ndt_resource_failure_payload() -> SubmissionPayload:
+    """夜班跨证书到期点 + 复检换用未重新校准的射线机版本。
+
+    - W-001 原始 RT 实施时段 22:00~次日02:00，跨过实施人证书 3/6 00:00 到期点；
+    - W-006 的检测引用了未登记校准版本 XR-250@2026B；
+    两份报告均被 NR-RECORD-EXCLUDED 剔除，20% 抽检数量不足，整批 hold。
+    """
+    welds = [
+        weld(f"W-{i:03d}", f"H-A{100+i}", f"H-B{200+i}", day=1 + i // 4)
+        for i in range(1, 11)
+    ]
+    # 实施人旧证 3/6 00:00 到期（续证后的新窗不在此包内——续证不改旧版）
+    personnel = default_personnel()
+    personnel[0].valid_to = datetime(2026, 3, 6, 0, 0, tzinfo=timezone.utc)
+    # 3/6 后续发的新证（新证号）：N-002 用新证，但设备版本仍未登记
+    personnel.append(ndt_cert(
+        "NRT-II-ZHANG-R2", "NDE-II-张",
+        valid_from="2026-03-06T00:00:00Z",
+        valid_to="2030-03-05T23:59:59Z",
+    ))
+    ndes = [
+        # W-001：夜班 3/5 22:00 ~ 3/6 02:00，跨过到期点
+        rt("N-001", "W-001", "accept", day=6, hour=2, start_hour=22,
+           start_day=5, bands=((0, 360),)),
+        # W-006：设备版本改为未登记的 2026B（人员用续发新证，均有效）
+        rt("N-002", "W-006", "accept", day=8,
+           examiner_cert="NRT-II-ZHANG-R2", reviewer_cert="NRT-II-LI",
+           equipment_uses=[NdeEquipmentUse(equipment_id="XR-250",
+                                           version="2026B", role="main")]),
+    ]
+    return SubmissionPayload(
+        package_ref="DEMO-4-NDT-RESOURCE",
+        line_no="PL-100",
+        submitted_by="质检员-王",
+        wps=[wps()],
+        welders=[welder()],
+        nde_personnel=personnel,
+        nde_equipment=default_equipment(),
+        welds=welds,
+        nde=ndes,
+        repairs=[],
+        lot_rules=[lot(ratio=0.2, on_reject="double")],
     )
