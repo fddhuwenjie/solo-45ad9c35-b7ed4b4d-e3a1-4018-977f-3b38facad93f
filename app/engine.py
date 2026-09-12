@@ -215,12 +215,14 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
         findings.extend(iter_blocking)
 
         # --- 复检时序：同iteration、同方法的底片若早于/等于补焊，判次序倒置 ---
+        # 该阻断条款必须同时进入 iter_blocking：即使同轮另有一张晚于补焊、
+        # 覆盖充分的合格片，本iteration也不得判闭合（链节与整链保持 false）。
         same_iter = ndes_by_iter.get(it, [])
         for rec in same_iter:
             same_method = (prev_reject_method is None
                            or rec.method == prev_reject_method)
             if same_method and rec.examined_at <= rep.repaired_at:
-                findings.append(_finding(
+                order_finding = _finding(
                     "RP-ORDER-INVALID", weld_no=weld.weld_no,
                     repair_id=rep.repair_id, nde_id=rec.nde_id,
                     evidence={"iteration": it,
@@ -228,7 +230,9 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
                               "reinspected_at": rec.examined_at.isoformat(),
                               "reason": "复检底片不晚于补焊时刻，"
                                         "补焊→复检次序倒置，该底片无效"},
-                ))
+                )
+                findings.append(order_finding)
+                iter_blocking.append(order_finding)
 
         # --- 复检：必须发生在补焊之后、同方法、覆盖挖补区、结论闭合 ---
         candidates = [

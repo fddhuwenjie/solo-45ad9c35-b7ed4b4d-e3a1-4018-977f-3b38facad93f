@@ -395,3 +395,55 @@ def test_equal_timestamp_is_not_valid_order():
     v = next(w for w in evaluate(p)["welds"] if w["weld_no"] == "W-901")
     assert "RP-ORDER-INVALID" in {f["code"] for f in v["findings"]}
     assert v["repairs"][0]["closed"] is False
+
+
+def test_mixed_early_and_late_reinspection_blocks_closure():
+    """同一返修轮次同时有早于补焊的 RT 和晚于补焊、覆盖充分的合格 RT：
+
+    虽然存在一张几何覆盖充分且结论合格的复检片，但同轮另一张底片
+    时序倒置（RP-ORDER-INVALID）属于阻断性条款，该轮不得闭合，
+    链节 closed、整口/整包 decision 必须一致为 hold/false。
+    """
+    data, n0, n1, rep = _single_repair_payload_dict()
+    rep["repaired_at"] = "2026-03-04T10:00:00Z"
+    rep["excavated_band"] = {"start_deg": 195, "end_deg": 235,
+                             "full_circle": False}
+    n1["nde_id"] = "N-EARLY"
+    n1["examined_at"] = "2026-03-03T14:00:00Z"   # 早于补焊
+    n1["result"] = "accept"
+    n1["defect_locations"] = []
+    n1["coverage"] = [{"start_deg": 180, "end_deg": 250,
+                       "full_circle": False}]
+    # 追加一张晚于补焊、覆盖挖补区的合格片
+    data["nde"].append({
+        "nde_id": "N-LATE", "weld_no": "W-901", "method": "RT",
+        "result": "accept", "examined_at": "2026-03-06T14:00:00Z",
+        "examiner": "x", "lot_id": None,
+        "coverage": [{"start_deg": 180, "end_deg": 250,
+                      "full_circle": False}],
+        "defect_locations": [], "iteration": 1, "report_no": None,
+    })
+    p = SubmissionPayload.model_validate(data)
+    r = evaluate(p)
+    v = next(w for w in r["welds"] if w["weld_no"] == "W-901")
+    codes = {f["code"] for f in v["findings"]}
+    assert "RP-ORDER-INVALID" in codes
+    nde_ids = {f.get("nde_id") for f in v["findings"]
+               if f["code"] == "RP-ORDER-INVALID"}
+    assert "N-EARLY" in nde_ids and "N-LATE" not in nde_ids
+    # 链节与结论一致
+    assert v["repairs"][0]["closed"] is False
+    assert v["decision"] == "hold"
+    assert r["decision"] == "hold"
+
+    # 序列化（模拟 JSON 审查包往返）后闭合状态仍为 false、条款仍在
+    import json
+    ser = json.loads(json.dumps({
+        "decision": v["decision"],
+        "clauses": sorted(codes),
+        "repairs": [{"iteration": l["iteration"], "closed": l["closed"]}
+                    for l in v["repairs"]],
+    }, default=str))
+    assert ser["decision"] == "hold"
+    assert "RP-ORDER-INVALID" in ser["clauses"]
+    assert all(not l["closed"] for l in ser["repairs"])

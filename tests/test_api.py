@@ -117,6 +117,48 @@ def _deep(obj):
     return copy.deepcopy(obj)
 
 
+def test_preview_mixed_early_and_late_rt_keeps_link_unclosed(client):
+    """/preview：同轮早于补焊 RT + 晚于补焊且覆盖充分 RT 的组合，
+    条款、hold 与序列化 closed 必须一致。"""
+    from examples.sample_data import double_repair_payload
+    data = double_repair_payload().model_dump(mode="json")
+    data["repairs"] = [r for r in data["repairs"] if r["iteration"] == 1]
+    data["nde"] = [r for r in data["nde"] if r["iteration"] in (0, 1)]
+    rep = data["repairs"][0]
+    rep["repaired_at"] = "2026-03-04T10:00:00Z"
+    rep["excavated_band"] = {"start_deg": 195, "end_deg": 235,
+                             "full_circle": False}
+    early = data["nde"][1]
+    early.update({
+        "nde_id": "N-EARLY",
+        "examined_at": "2026-03-03T14:00:00Z",  # 早于补焊
+        "result": "accept", "defect_locations": [],
+        "coverage": [{"start_deg": 180, "end_deg": 250,
+                      "full_circle": False}],
+    })
+    data["nde"].append({
+        "nde_id": "N-LATE", "weld_no": "W-901", "method": "RT",
+        "result": "accept", "examined_at": "2026-03-06T14:00:00Z",
+        "examiner": "x", "lot_id": None,
+        "coverage": [{"start_deg": 180, "end_deg": 250,
+                      "full_circle": False}],
+        "defect_locations": [], "iteration": 1, "report_no": None,
+    })
+
+    body = client.post("/preview", json=data).json()
+    assert body["decision"] == "hold"
+    assert "RP-ORDER-INVALID" in body["clauses_triggered"]
+
+    weld = next(w for w in body["welds"] if w["weld_no"] == "W-901")
+    assert weld["decision"] == "hold"
+    order_nde = {f.get("nde_id") for f in weld["findings"]
+                 if f["code"] == "RP-ORDER-INVALID"}
+    assert order_nde == {"N-EARLY"}  # 仅倒置片挂条款，晚片不挂
+    # 序列化结果中链节仍为 false，与 hold 一致
+    assert all(link["closed"] is False for link in weld["repairs"])
+    assert weld["repairs"][0]["closed"] is False
+
+
 # ---------------------------------------------------------------- JSON 审查包
 
 
