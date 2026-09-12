@@ -63,6 +63,10 @@ KEY_FIELDS = {
     "quiver_stays": "stay_id",
     "consumable_segments": "segment_id",
     "consumable_events": "event_id",
+    # 焊接道次执行链：仪表以 (gauge_id, version) 复合身份，重新校准派生新版本
+    "weld_gauges": ("gauge_id", "version"),
+    "weld_passes": "pass_id",
+    "temperature_measurements": "measure_id",
     "welds": "weld_no",
     "nde": "nde_id",
     "repairs": "repair_id",
@@ -170,6 +174,18 @@ class Store:
                     "审查包不得冻结；请补录完整材料链后重新提交。缺口: "
                     + "；".join(
                         f"{g['kind']}({g.get('detail', '')})" for g in gaps[:10]
+                    )
+                )
+            # 道次执行链结构缺口（未提交道次/WPS 未冻结方法窗口/仪表版本
+            # 未登记或未引用）同样禁止冻结；参数越限等规则性 hold 可冻结纠错
+            we = result.get("weld_execution") or {}
+            if we.get("enabled") and we.get("freeze_blocked"):
+                wgaps = (we.get("completeness") or {}).get("gaps", [])
+                raise ConflictError(
+                    "焊接道次执行链存在空项或引用缺失（道次/WPS 方法窗口/"
+                    "仪表版本），审查包不得冻结；请补录完整后重新提交。缺口: "
+                    + "；".join(
+                        f"{g['kind']}({g.get('detail', '')})" for g in wgaps[:10]
                     )
                 )
             # 冻结前校验快照哈希，防库内被篡改
@@ -570,4 +586,120 @@ def diff_versions(old_pkg: dict, new_pkg: dict) -> dict:
         "new_decision": new_pkg["decision"],
         "evaluation": _nde_evaluation(old_pkg, new_pkg),
         "consumable_evaluation": _wm_evaluation(old_pkg, new_pkg),
+        "weld_pass_evaluation": _wp_evaluation(old_pkg, new_pkg),
+    }
+
+
+# ============================================================ 焊接道次执行链差异
+
+
+def _wp_scope_states(pkg: dict) -> dict[str, dict]:
+    """从冻结评估结果抽取每个施焊范围的道次链核验状态（供版本差异呈现）。
+
+    施焊缝取自 welds[].weld_passes，返修范围取自
+    welds[].repairs[].weld_passes；未启用道次链时返回空映射。
+    """
+    result = pkg.get("result", {})
+    if not result.get("weld_execution", {}).get("enabled"):
+        return {}
+    states: dict[str, dict] = {}
+
+    for w in result.get("welds", []):
+        passes = w.get("weld_passes") or []
+        reasons = sorted({
+            code for p in passes for code in (p.get("reasons") or [])
+        })
+        # 施焊缝范围级条款（WP-PASS-UNTRACED 等）挂在焊口 findings
+        scope_codes = {f.get("code") for f in w.get("findings", [])
+                       if (f.get("code") or "").startswith("WP-")
+                       and not f.get("repair_id")}
+        reasons_set = sorted(set(reasons) | scope_codes)
+        key = f"production:{w['weld_no']}"
+        states[key] = {
+            "scope_key": key,
+            "weld_no": w["weld_no"],
+            "scope": "production",
+            "repair_id": None,
+            "iteration": None,
+            "wps_no": None,
+            "pass_total": len(passes),
+            "pass_valid": bool(w.get("passes_valid", True)) and not reasons_set,
+            "reasons": reasons_set,
+            "passes": passes,
+        }
+        for link in w.get("repairs", []):
+            rpasses = link.get("weld_passes") or []
+            rreasons = sorted({
+                code for p in rpasses for code in (p.get("reasons") or [])
+            })
+            # WP-REPAIR-PASS-INVALID 是"返修不得闭合"的包装条款，
+            # 具体失效原因以各道 reasons（WP-*）为准，不并入范围原因集合
+            rscope_codes = {f.get("code") for f in w.get("findings", [])
+                            if f.get("repair_id") == link["repair_id"]
+                            and (f.get("code") or "").startswith("WP-")
+                            and f.get("code") != "WP-REPAIR-PASS-INVALID"}
+            rset = sorted(set(rreasons) | rscope_codes)
+            rkey = f"repair:{link['repair_id']}"
+            states[rkey] = {
+                "scope_key": rkey,
+                "weld_no": w["weld_no"],
+                "scope": "repair",
+                "repair_id": link["repair_id"],
+                "iteration": link.get("iteration"),
+                "wps_no": link.get("wps_no"),
+                "pass_total": len(rpasses),
+                "pass_valid": bool(link.get("passes_valid", True))
+                and not rset,
+                "reasons": rset,
+                "passes": rpasses,
+            }
+    return states
+
+
+def _wp_evaluation(old_pkg: dict, new_pkg: dict) -> Optional[dict]:
+    """对比两版焊接道次执行链结论：新增/撤销条款与焊口/返修状态翻转。"""
+    old_we = old_pkg.get("result", {}).get("weld_execution", {})
+    new_we = new_pkg.get("result", {}).get("weld_execution", {})
+    if not old_we.get("enabled") and not new_we.get("enabled"):
+        return None
+    old_result, new_result = old_pkg["result"], new_pkg["result"]
+    old_codes = sorted(c for c in old_result.get("clauses_triggered", [])
+                       if c.startswith("WP-"))
+    new_codes = sorted(c for c in new_result.get("clauses_triggered", [])
+                       if c.startswith("WP-"))
+    old_states = _wp_scope_states(old_pkg)
+    new_states = _wp_scope_states(new_pkg)
+
+    changed: list[dict] = []
+    for key in sorted(set(old_states) | set(new_states)):
+        o, n = old_states.get(key), new_states.get(key)
+        ov = o["pass_valid"] if o else None
+        nv = n["pass_valid"] if n else None
+        if ov == nv:
+            continue
+        changed.append({
+            "scope_key": key,
+            "change": "valid_to_invalid" if ov and not nv
+            else ("invalid_to_valid" if not ov and nv
+                  else "presence_changed"),
+            "old": o,
+            "new": n,
+        })
+
+    def _invalid(states: dict[str, dict]) -> list[dict]:
+        return [{k: v for k, v in st.items() if k != "passes"}
+                for st in sorted(states.values(),
+                                 key=lambda s: s["scope_key"])
+                if not st["pass_valid"]]
+
+    return {
+        "old_decision": old_result.get("decision"),
+        "new_decision": new_result.get("decision"),
+        "old_codes": old_codes,
+        "new_codes": new_codes,
+        "resolved": sorted(set(old_codes) - set(new_codes)),
+        "introduced": sorted(set(new_codes) - set(old_codes)),
+        "old_invalid_scopes": _invalid(old_states),
+        "new_invalid_scopes": _invalid(new_states),
+        "changed_scopes": changed,
     }

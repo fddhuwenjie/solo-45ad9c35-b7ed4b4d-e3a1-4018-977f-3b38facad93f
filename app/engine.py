@@ -18,6 +18,7 @@ from . import geometry as geo
 from .clauses import CLAUSES, Severity
 from .consumables import verify_consumables
 from .nde_resource import verify_nde_resource
+from .weld_execution import verify_weld_passes
 from .qualification import (
     match_welder,
     match_wps,
@@ -38,7 +39,7 @@ MAX_REPAIRS = 2
 def _finding(code: str, *, weld_no=None, lot_id=None, nde_id=None,
              repair_id=None, report_no=None, evidence=None,
              batch_id=None, segment_id=None, bake_id=None, stay_id=None,
-             use_id=None) -> dict:
+             use_id=None, pass_id=None, measure_id=None) -> dict:
     meta = CLAUSES[code]
     return {
         "code": code,
@@ -56,6 +57,8 @@ def _finding(code: str, *, weld_no=None, lot_id=None, nde_id=None,
         "bake_id": bake_id,
         "stay_id": stay_id,
         "use_id": use_id,
+        "pass_id": pass_id,
+        "measure_id": measure_id,
         "evidence": evidence or {},
     }
 
@@ -100,18 +103,26 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
                            nde_valid: dict[str, bool] | None = None,
                            repair_consumable_invalid: dict[str, bool] | None = None,
                            repair_consumable_codes: dict[str, list[str]] | None = None,
-                           repair_consumable_links: dict[str, list[dict]] | None = None):
+                           repair_consumable_links: dict[str, list[dict]] | None = None,
+                           repair_pass_invalid: dict[str, bool] | None = None,
+                           repair_pass_codes: dict[str, list[str]] | None = None,
+                           repair_pass_links: dict[str, list[dict]] | None = None):
     """沿缺陷位置串接 原始不合格 -> 挖补 -> 复检，返回 (findings, links, closed)。
 
     资源核验未通过的检测记录（nde_valid[nde_id]=False）一律不参与串接：
     既不能作为不合格缺陷依据，也不能作为返修复检合格片。
     repair_consumable_invalid[repair_id]=True 时该次返修焊材链不合规，
     失效焊材不得用于返修闭合（RP-WM-INVALID）。
+    repair_pass_invalid[repair_id]=True 时该次返修补焊道次链不合规，
+    返修混用参数不得被最终合格报告掩盖（WP-REPAIR-PASS-INVALID）。
     """
     nde_valid = nde_valid or {}
     repair_consumable_invalid = repair_consumable_invalid or {}
     repair_consumable_codes = repair_consumable_codes or {}
     repair_consumable_links = repair_consumable_links or {}
+    repair_pass_invalid = repair_pass_invalid or {}
+    repair_pass_codes = repair_pass_codes or {}
+    repair_pass_links = repair_pass_links or {}
     findings: list[dict] = []
     links: list[dict] = []
 
@@ -275,6 +286,15 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
                           "wm_codes": repair_consumable_codes.get(
                               rep.repair_id, [])},
             ))
+        # 道次链：返修补焊道次必须按返修 WPS 窗口施焊；混用/越限参数
+        # 不得被最终合格报告掩盖
+        if repair_pass_invalid.get(rep.repair_id):
+            iter_blocking.append(_finding(
+                "WP-REPAIR-PASS-INVALID", weld_no=weld.weld_no,
+                repair_id=rep.repair_id,
+                evidence={"iteration": it,
+                          "wp_codes": repair_pass_codes.get(rep.repair_id, [])},
+            ))
         findings.extend(iter_blocking)
 
         # --- 复检时序：同iteration、同方法的底片若早于/等于补焊，判次序倒置 ---
@@ -398,6 +418,8 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
             "excavated_band": geo.band_dict(rep.excavated_band),
             "reinspections": reinspection_dicts,
             "consumable_uses": repair_consumable_links.get(rep.repair_id, []),
+            "weld_passes": repair_pass_links.get(rep.repair_id, []),
+            "passes_valid": not repair_pass_invalid.get(rep.repair_id, False),
             "closed": closed,
         })
 
@@ -648,7 +670,10 @@ def _evaluate_weld(weld: WeldRecord, payload: SubmissionPayload,
                    nde_valid: dict[str, bool] | None = None,
                    repair_consumable_invalid: dict[str, bool] | None = None,
                    repair_consumable_codes: dict[str, list[str]] | None = None,
-                   repair_consumable_links: dict[str, list[dict]] | None = None):
+                   repair_consumable_links: dict[str, list[dict]] | None = None,
+                   repair_pass_invalid: dict[str, bool] | None = None,
+                   repair_pass_codes: dict[str, list[str]] | None = None,
+                   repair_pass_links: dict[str, list[dict]] | None = None):
     findings: list[dict] = []
 
     # 炉批：两个母材端都必须有炉批号；异径提示
@@ -697,6 +722,7 @@ def _evaluate_weld(weld: WeldRecord, payload: SubmissionPayload,
         weld, ndes, repairs, wps_index, welder_index, nde_valid,
         repair_consumable_invalid, repair_consumable_codes,
         repair_consumable_links,
+        repair_pass_invalid, repair_pass_codes, repair_pass_links,
     )
     findings.extend(chain_findings)
 
@@ -837,12 +863,39 @@ def evaluate(payload: SubmissionPayload) -> dict:
                 repair_consumable_codes[rep.repair_id].append(
                     "WM-CONSUMABLE-UNTRACED")
 
+    # ---- 0c) 焊接道次执行链核验（WPS 方法窗口 + 逐道次参数/测温/仪表）----
+    wp = verify_weld_passes(payload)
+    wp_findings_by_weld: dict[str, list[dict]] = defaultdict(list)
+    repair_pass_invalid: dict[str, bool] = {}
+    repair_pass_codes: dict[str, list[str]] = defaultdict(list)
+    repair_pass_links: dict[str, list[dict]] = defaultdict(list)
+    production_pass_views: dict[str, list[dict]] = {}
+    production_pass_valid: dict[str, bool] = {}
+    if wp["enabled"]:
+        for state in wp["scope_states"].values():
+            if state["scope"] == "production":
+                production_pass_views[state["weld_no"]] = state["passes"]
+                production_pass_valid[state["weld_no"]] = state["passes_valid"]
+                owner = state["weld_no"]
+            else:
+                repair_pass_links[state["repair_id"]] = state["passes"]
+                owner = state["weld_no"]
+                if not state["passes_valid"]:
+                    repair_pass_invalid[state["repair_id"]] = True
+                    repair_pass_codes[state["repair_id"]].extend(
+                        state["reasons"])
+            # 范围级条款（含 WP-PASS-UNTRACED）挂到归属焊口；返修范围的
+            # 阻断性 WP-REPAIR-PASS-INVALID 由返修链统一补发
+            for f in state["findings"]:
+                wp_findings_by_weld[owner].append({**f, "weld_no": owner})
+
     def _dedup_findings(items: list[dict]) -> list[dict]:
         seen: set[tuple] = set()
         out: list[dict] = []
         for f in items:
             key = (f["code"], f.get("nde_id"), f.get("repair_id"),
-                   f.get("use_id"), f.get("batch_id"), f.get("segment_id"),
+                   f.get("use_id"), f.get("pass_id"), f.get("measure_id"),
+                   f.get("batch_id"), f.get("segment_id"),
                    json_dumps_evidence(f.get("evidence")))
             if key in seen:
                 continue
@@ -856,10 +909,15 @@ def evaluate(payload: SubmissionPayload) -> dict:
             repair_consumable_invalid,
             {k: sorted(set(v)) for k, v in repair_consumable_codes.items()},
             dict(repair_consumable_links),
+            repair_pass_invalid,
+            {k: sorted(set(v)) for k, v in repair_pass_codes.items()},
+            dict(repair_pass_links),
         )
         findings = resource_findings.get(weld.weld_no, []) + findings
         if wm["enabled"]:
             findings = wm_findings_by_weld.get(weld.weld_no, []) + findings
+        if wp["enabled"]:
+            findings = wp_findings_by_weld.get(weld.weld_no, []) + findings
         findings = _dedup_findings(findings)
         hold = any(f["severity"] == Severity.HOLD.value for f in findings)
         weld_results[weld.weld_no] = {
@@ -897,6 +955,11 @@ def evaluate(payload: SubmissionPayload) -> dict:
         if not wm["enabled"]:
             return []
         return list(production_use_views.get(weld_no, []))
+
+    def _production_pass_views(weld_no: str) -> list[dict]:
+        if not wp["enabled"]:
+            return []
+        return list(production_pass_views.get(weld_no, []))
 
     for weld in payload.welds:
         base = weld_results[weld.weld_no]
@@ -948,6 +1011,9 @@ def evaluate(payload: SubmissionPayload) -> dict:
                               key=lambda r: (r.iteration, r.examined_at))],
             "repairs": base["links"],
             "consumable_uses": _production_use_links(weld.weld_no),
+            "weld_passes": _production_pass_views(weld.weld_no),
+            "passes_valid": (production_pass_valid.get(weld.weld_no)
+                             if wp["enabled"] else None),
             "decision": "hold" if hold else "release",
             "findings": findings,
         })
@@ -957,7 +1023,8 @@ def evaluate(payload: SubmissionPayload) -> dict:
     all_findings.sort(key=lambda f: (
         f.get("weld_no") or "~", f.get("lot_id") or "~",
         f["code"], f.get("nde_id") or "", f.get("repair_id") or "",
-        f.get("use_id") or "", f.get("batch_id") or "",
+        f.get("use_id") or "", f.get("pass_id") or "",
+        f.get("measure_id") or "", f.get("batch_id") or "",
         f.get("segment_id") or "",
     ))
 
@@ -995,6 +1062,13 @@ def evaluate(payload: SubmissionPayload) -> dict:
             "consumable_uses_invalid": sum(
                 1 for s in wm["use_states"].values()
                 if not s["consumable_valid"]) if wm["enabled"] else 0,
+            "weld_pass_chain_enabled": wp["enabled"],
+            "weld_gauges_total": len(payload.weld_gauges),
+            "weld_passes_total": len(payload.weld_passes),
+            "temperature_measurements_total": len(payload.temperature_measurements),
+            "weld_pass_scopes_invalid": sum(
+                1 for st in wp["scope_states"].values()
+                if not st["passes_valid"]) if wp["enabled"] else 0,
         },
         "nde_resources": {
             "personnel": [
@@ -1041,6 +1115,7 @@ def evaluate(payload: SubmissionPayload) -> dict:
         "lot_summaries": lot_summaries,
         "welds": weld_verdicts,
         "consumables": _consumables_block(payload, wm),
+        "weld_execution": _weld_execution_block(payload, wp),
         "findings": all_findings,
         "clauses_triggered": codes,
         "evaluated_at": datetime.now(timezone.utc),
@@ -1101,4 +1176,68 @@ def _consumables_block(payload: SubmissionPayload, wm: dict) -> dict:
             }
             for f in wm.get("chain_failures", [])
         ],
+    }
+
+def _weld_execution_block(payload: SubmissionPayload, wp: dict) -> dict:
+    """焊接道次执行链目录与逐范围核验状态（随审查包冻结）。"""
+    if not wp.get("enabled"):
+        return {"enabled": False}
+    invalid_scopes = [
+        {
+            "scope_key": st["scope_key"],
+            "weld_no": st["weld_no"],
+            "scope": st["scope"],
+            "repair_id": st["repair_id"],
+            "iteration": st["iteration"],
+            "wps_no": st["wps_no"],
+            "pass_total": st["pass_total"],
+            "reasons": st["reasons"],
+            "invalid_passes": [
+                {
+                    "pass_id": pv["pass_id"],
+                    "pass_no": pv["pass_no"],
+                    "layer_no": pv["layer_no"],
+                    "role": pv["role"],
+                    "process": pv["process"],
+                    "welder_id": pv["welder_id"],
+                    "started_at": pv["started_at"],
+                    "finished_at": pv["finished_at"],
+                    "current_a": pv["current_a"],
+                    "voltage_v": pv["voltage_v"],
+                    "travel_speed_mm_min": pv["travel_speed_mm_min"],
+                    "heat_input_kj_mm": pv["heat_input_kj_mm"],
+                    "governing_temperature": pv["governing_temperature"],
+                    "reasons": pv["reasons"],
+                }
+                for pv in st["passes"] if not pv["pass_valid"]
+            ],
+            "invalid_measurements": [
+                m for m in st.get("measurements", [])
+                if not m.get("gauge_valid", True)
+            ],
+        }
+        for st in sorted(wp["scope_states"].values(),
+                         key=lambda x: (x["weld_no"], x["scope"],
+                                        x["repair_id"] or ""))
+        if not st["passes_valid"]
+    ]
+    return {
+        "enabled": True,
+        "completeness": {"gaps": wp.get("gaps", []),
+                         "affected_welds": wp.get("affected_welds", [])},
+        "freeze_blocked": wp.get("freeze_blocked", False),
+        "wps_windows": [
+            {
+                "wps_no": w.wps_no,
+                "process_windows": [
+                    win.model_dump(mode="json") for win in w.process_windows
+                ],
+            }
+            for w in payload.wps if w.process_windows
+        ],
+        "gauges": [g.model_dump(mode="json") for g in payload.weld_gauges],
+        "passes": [p.model_dump(mode="json") for p in payload.weld_passes],
+        "measurements": [m.model_dump(mode="json")
+                         for m in payload.temperature_measurements],
+        "invalid_scopes": invalid_scopes,
     }

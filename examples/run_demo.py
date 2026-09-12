@@ -20,6 +20,7 @@ from examples.sample_data import (
     double_repair_payload,
     extension_payload,
     ndt_resource_failure_payload,
+    weld_pass_failure_payload,
 )
 
 SCENARIOS = [
@@ -34,6 +35,8 @@ SCENARIOS = [
      ndt_resource_failure_payload),
     ("5-weld-material", "焊材保温校准失效/超时/数量重复分配（材料链 hold）",
      consumable_failure_payload),
+    ("6-weld-pass", "道次参数越限/层间高温/采样缺失/返修混用（道次链 hold）",
+     weld_pass_failure_payload),
 ]
 
 
@@ -83,6 +86,20 @@ def main() -> None:
                       f"批次 {item['batch_id']} 段 {item['segment_id']} "
                       f"暴露 {item['exposure_minutes']}min 原因: "
                       f"{'、'.join(item['reasons'])}")
+        we = result.get("weld_execution") or {}
+        if we.get("enabled"):
+            print(f"  道次链: 仪表 {len(we['gauges'])} 道次 "
+                  f"{result['stats']['weld_passes_total']} 测温 "
+                  f"{result['stats']['temperature_measurements_total']} "
+                  f"失效范围 {result['stats']['weld_pass_scopes_invalid']}"
+                  f"{('  [冻结阻断]' if we.get('freeze_blocked') else '')}")
+            for item in we["invalid_scopes"]:
+                loc = (f"返修{item['repair_id']}" if item["scope"] == "repair"
+                       else item["weld_no"])
+                bad = ",".join(sorted({
+                    q["pass_id"] for q in item["invalid_passes"]}))
+                print(f"    失效范围 {loc}（{item['weld_no']}）道次 {bad or '-'} "
+                      f"原因: {'、'.join(item['reasons'])}")
         for w in result["welds"]:
             if w["decision"] == "hold":
                 detail = sorted({f["code"] for f in w["findings"]})

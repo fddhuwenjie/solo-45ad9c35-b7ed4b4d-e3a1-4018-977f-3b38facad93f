@@ -93,6 +93,7 @@ def _pack(rec: dict) -> dict:
         "welds": result["welds"],
         "nde_resources": result.get("nde_resources", {}),
         "consumables": result.get("consumables", {"enabled": False}),
+        "weld_execution": result.get("weld_execution", {"enabled": False}),
         "findings": result["findings"],
         "clauses_triggered": result["clauses_triggered"],
     }
@@ -142,7 +143,7 @@ def preview(payload: SubmissionPayload) -> dict:
         "evaluated_at": result["evaluated_at"],
         **{k: result[k] for k in
            ("stats", "lot_summaries", "welds", "nde_resources", "consumables",
-            "findings", "clauses_triggered")},
+            "weld_execution", "findings", "clauses_triggered")},
     }
     return pack
 

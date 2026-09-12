@@ -10,6 +10,10 @@
 - RP 系列：返修、复检与沿缺陷位置的串接。
 - NR 系列：无损检测资源核验（人员证书、设备版本按整个实施时段持续有效）。
 - WM 系列：焊材批次、烘干/保温/领用链（Welding Material）。
+- WP 系列：焊接道次执行链（Welding Pass）：WPS 版本冻结各方法参数窗口，
+  逐道次登记起止时刻、焊工、方法、实测电流/电压/焊速、焊缝长度、测温记录与
+  仪表版本；按时间与层序重建道次并换算热输入，合格报告不得掩盖道次违规与
+  返修混用参数。
 """
 from __future__ import annotations
 
@@ -30,6 +34,7 @@ class ClauseCategory(str, Enum):
     REPAIR = "repair"
     RECORD = "record"
     CONSUMABLE = "consumable"
+    WELD_EXECUTION = "weld_execution"
 
 
 # 条款目录。键即 finding.code 引用的稳定编号。
@@ -483,6 +488,158 @@ CLAUSES: dict[str, dict[str, str]] = {
         "reference": "GB 50236：超过暴露时限或返烘次数的焊条应报废，报废数量"
                      "不得超出该领用段可处置数量",
         "message": "报废数量超出领用段内可处置数量（报废事件与领用数量对不上）",
+    },
+    # ---- 焊接道次执行链（WP 系列）----
+    # 焊口只登记 WPS 编号和完工时刻无法证明打底/填充/盖面实际遵守电流、电压、
+    # 焊速与层间温度；返修混用参数也会被最终合格报告掩盖。逐焊口与返修提交
+    # 道次链（编号/起止时刻/焊工/方法/实测参数/焊缝长度/测温记录/仪表版本），
+    # 服务按时间与层序重建道次、换算热输入并逐项核对；任一不满足，相关焊口
+    # 保持 hold，并定位到原始道次与测点。
+    "WP-PASS-UNTRACED": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236 / GB/T 20801：焊接施工记录应逐道次记载施焊人、"
+                     "时间与实际工艺参数，做到道次可追溯",
+        "message": "施焊/补焊未提交任何道次记录（道次链启用时不得仅有 WPS 编号"
+                   "与完工时刻）",
+    },
+    "WP-PASS-DUP": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "质量记录可追溯：同一焊口/返修范围内道次编号应唯一",
+        "message": "同一焊口（或返修）范围内道次编号重号",
+    },
+    "WP-PASS-OVERLAP": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "质量记录可追溯：同一焊工/同一焊口的道次施焊时段不得重叠",
+        "message": "道次施焊时段相互重叠（时间序无法重建）",
+    },
+    "WP-LAYER-GAP": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236：焊缝应按打底(根焊)→填充→盖面的层序逐道施焊，"
+                     "层序应连续",
+        "message": "道次层序断档：层号不自 1 连续或道次时间序与层序不一致",
+    },
+    "WP-PASS-ORDER": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "质量记录可追溯：各道次起止时刻应严格递增，结束时刻应晚于"
+                     "开始时刻",
+        "message": "道次时间序倒置或时段无效（止不晚于起，或后道早于前道）",
+    },
+    "WP-PASS-WINDOW-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "NB/T 47014 / GB 50236：WPS 应按焊接方法冻结极性、电流、"
+                     "电压、热输入、预热与层间温度范围",
+        "message": "所用 WPS 未冻结该焊接方法的参数窗口（无据可核实际参数）",
+    },
+    "WP-POLARITY": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236：实际极性应与 WPS 规定一致",
+        "message": "道次实际极性不在 WPS 该方法允许极性内",
+    },
+    "WP-CURRENT-OUTSIDE": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236：焊接电流应落在 WPS 规定范围内",
+        "message": "道次实测电流超出 WPS 该方法窗口",
+    },
+    "WP-VOLTAGE-OUTSIDE": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236：电弧电压应落在 WPS 规定范围内",
+        "message": "道次实测电压超出 WPS 该方法窗口",
+    },
+    "WP-TRAVEL-OUTSIDE": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236：焊接速度（由焊缝长度/燃弧时间换算）应落在 WPS "
+                     "规定范围内",
+        "message": "道次焊速超出 WPS 该方法窗口",
+    },
+    "WP-HEATINPUT-OUTSIDE": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "NB/T 47014：热输入 E=k·U·I·60/v 应落在 WPS 认可范围内，"
+                     "返修不得混用超窗口参数",
+        "message": "道次换算热输入超出 WPS 该方法热输入上限（或低于规定下限）",
+    },
+    "WP-PARAM-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "质量记录完整性：道次记录应载明电流、电压、焊缝长度等实际"
+                     "工艺参数，缺失即无法核对窗口",
+        "message": "道次实测参数缺失（电流/电压/焊缝长度，或换算焊速所需燃弧"
+                   "时间不足），不得以空值绕过参数核对",
+    },
+    "WP-WELDER-MISMATCH": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "TSG Z6002：逐道次施焊焊工应与焊口登记焊工一致并在其资格"
+                     "项目内施焊",
+        "message": "道次施焊焊工与焊口/返修登记焊工不一致，或未登记",
+    },
+    "WP-PREHEAT-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236：要求预热时，首道（根焊）起弧前应有预热温度"
+                     "测温记录",
+        "message": "首道起弧前缺少预热温度测温记录（采样缺失）",
+    },
+    "WP-PREHEAT-LOW": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236：预热温度不得低于 WPS 规定下限",
+        "message": "首道起弧前预热温度低于 WPS 规定下限",
+    },
+    "WP-INTERPASS-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236：多层多道焊每道起弧前应测温并记录层间温度",
+        "message": "道次起弧前缺少层间温度测温记录（采样缺失，无法证明符合层间"
+                   "温度要求）",
+    },
+    "WP-INTERPASS-HIGH": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236：层间温度不得高于 WPS 规定上限（也不得低于规定"
+                     "下限）",
+        "message": "道次起弧前层间温度超出 WPS 窗口（过高或过低）",
+    },
+    "WP-GAUGE-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "计量体系/质量记录完整性：道次参数与测温应可追溯所用电流表、"
+                     "电压表、焊速计时与测温仪表的具体校准版本",
+        "message": "道次或测温记录引用的仪表版本未登记（引用缺失）",
+    },
+    "WP-GAUGE-CALIBRATION": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "计量体系：电流表/电压表/测温仪表应在校准有效期内使用；"
+                     "跨到期点的施焊时段不得整体采信",
+        "message": "仪表校准有效期未持续覆盖道次施焊/测温时点（校准失效）",
+    },
+    "WP-MEASURE-LAG": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "质量记录可追溯：测温时点应位于上一道结束与本道起弧之间，"
+                     "不得事后补测",
+        "message": "测温记录时点不在其所对应道次的起弧前窗口内（事后补测或"
+                   "时序倒置）",
+    },
+    "WP-REPAIR-PASS-INVALID": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.REPAIR.value,
+        "reference": "GB 50236 / GB/T 20801：返修补焊道次必须按返修 WPS 窗口"
+                     "施焊；混用打底/填充/盖面参数或超窗口参数不得被最终合格"
+                     "报告掩盖",
+        "message": "返修道次链核验未通过（参数越限/层序/测温/仪表等具体 WP "
+                   "条款随附），该次返修不得闭合",
     },
 }
 

@@ -29,6 +29,22 @@
   批次/制度/设备/事件/逐口消耗为空或引用缺失属**结构缺口**，审查包不得冻结
   （`POST /review` 返回 409）或签发，只能补录后重新提交；超时/温度等
   **规则性** hold 记录齐全时可冻结，纠错从旧版派生新版本。
+- **焊接道次执行链（WP 系列）**：焊口只登记 WPS 编号与完工时刻无法证明
+  打底/填充/盖面各道实际遵守电流、电压、焊速与层间温度，返修混用参数也会
+  被最终合格报告掩盖。WPS 版本按焊接方法冻结**极性、电流、电压、焊速、
+  热输入、预热与层间温度窗口**（`process_windows`），逐焊口与逐返修提交
+  道次记录（编号/层号/起止时刻/焊工/方法/极性/实测电流电压/焊缝长度/
+  燃弧时间/仪表版本）与起弧前**预热/层间测温记录**（测温仪表版本）。服务按
+  时间与层序重建道次，换算焊速 v=焊缝长度/燃弧时间、热输入
+  E=k·U·I·60/v，核对参数窗口、逐道焊工资格与前一道后的层间温度；
+  道次重号、时段重叠（含同一焊工跨焊口重叠）、层序断档、时间序倒置、
+  仪表校准失效、测温采样缺失/事后补测或任一参数越限时相关焊口保持 hold，
+  并定位到原始道次（`pass_id`）与测点（`measure_id`）。**返修道次链不
+  合规即 `WP-REPAIR-PASS-INVALID`，该次返修不得闭合——复检 RT 合格也不
+  能掩盖**。未提交道次、WPS 未冻结方法窗口、仪表版本未登记/未引用属结构
+  缺口，禁止冻结（409）；参数越限等记录齐全的规则性 hold 可冻结，纠错
+  派生修订版本，`/diff` 的 `weld_pass_evaluation` 呈现条款新增/撤销与
+  焊口、返修范围的 invalid_to_valid 状态翻转。
 
 复核签字后**冻结输入快照**（SHA-256，含当时的人员证书与设备版本摘要），
 续证/重新校准不回写旧版；纠错只能从旧版**开修订分支**，
@@ -97,6 +113,12 @@ python examples/run_demo.py --out out/demo
    （消耗+退回 > 领出）→ 仅命中段内消耗失效、返修不得闭合，触发
    `WM-CONTAINER-CALIBRATION`、`WM-EXPOSURE-EXCEEDED`、
    `WM-QTY-CONSERVATION`、`RP-WM-INVALID`；无关领用段不被牵连。
+6. **道次执行链失效**：WPS 冻结 GTAW/SMAW 道次窗口后，W-007 盖面道
+   电流 200A 超窗、W-008 填充道前层间温度 240℃ 超 200℃ 上限、W-009
+   漏登填充道前测温、监测仪表 3/4 校准到期致 W-001 返修道次落在失效区间
+   且盖面道电流 180A 超窗 → 即使返修复检 RT 合格，返修也不得闭合
+   （`WP-REPAIR-PASS-INVALID`），触发 `WP-CURRENT-OUTSIDE`、
+   `WP-INTERPASS-HIGH`、`WP-INTERPASS-MISSING`、`WP-GAUGE-CALIBRATION`。
 
 ### HTTP 流程示例
 
@@ -214,6 +236,41 @@ curl -s "localhost:8000/packages/$PID/welds/W-001/svg?version=1" -o w001.svg
   焊口/返修、批次、领用段、暴露时长与原因，`changed_uses` 标出
   invalid_to_valid / valid_to_invalid；生产消耗与返修消耗共用同一扁平结构。
 
+**焊接道次执行链（WP 系列）**：WPS 在 `process_windows` 中按方法
+（GTAW/SMAW…）冻结极性、电流、电压、焊速、热输入、预热与层间温度窗口；
+载荷在 `weld_gauges`（电流表/电压表/测温仪/计时器/监测仪校准版本，复合身份
+`gauge_id+version`）、`weld_passes`（逐焊口/逐返修的道次）与
+`temperature_measurements`（起弧前预热/层间测温）中登记。
+
+- **道次重建**：同一焊口（或返修）范围内 `pass_no` 必须唯一且自 1 连续；
+  层号自 1 起逐层递增（1=打底/根焊，末层=盖面，中间=填充）；按起弧时刻重建
+  时间序，相邻道次时段不得重叠；同一焊工在不同焊口/施焊与返修之间的时段
+  重叠同样判 `WP-PASS-OVERLAP`；道次收弧晚于焊口/返修登记完工时刻判
+  `WP-PASS-ORDER`；
+- **热输入换算**：焊速 v=焊缝长度/燃弧时间（`arc_minutes` 缺省取道次起止
+  时长），热输入 E=k·U·I·60/v（kJ/mm，k 为方法热效率系数）；极性、电流、
+  电压、焊速、热输入逐项核对方法窗口，越限即 hold 并给出实测值与窗口；
+- **焊工资格**：每道实际焊工必须与焊口/返修登记焊工一致，并按该道起弧时点
+  匹配焊工资格（方法/位置/组别/厚度/管径/有效期）；
+- **预热/层间温度**：首道起弧前须有 `preheat` 测温且不低于窗口下限；其余
+  每道起弧前须有 `interpass` 测温且落在层间窗口；测温时点必须位于上一道
+  收弧之后、本道起弧之前（事后补测判 `WP-MEASURE-LAG` 且不计入采样）；
+  `pass_no` 缺省时由引擎按测温时点重建归属；
+- **仪表版本**：道次监测仪表与测温仪表都必须登记并在校准有效期内，按
+  整个道次时段（测温按测温时点）核对；跨到期点即 `WP-GAUGE-CALIBRATION`；
+- **返修闭合**：返修补焊道次链任一不通过即 `WP-REPAIR-PASS-INVALID`
+  （随附具体 WP 码），该次返修不得闭合——即使返修后复检 RT 合格，
+  `RP-*` 返修链仍保持开口、整口 hold，最终合格报告无法掩盖参数混用；
+- **结构缺口**：链启用（仪表/道次/测温任一非空）后，焊口或返修未提交任何
+  道次（`WP-PASS-UNTRACED`）、WPS 未冻结实际方法窗口、道次/测温引用未登记
+  仪表版本时，`weld_execution.freeze_blocked=true`，`POST /review` 返回
+  409；记录齐全的规则性 hold（越限/断档/采样缺失/校准失效）可冻结，
+  纠错从旧版派生修订；
+- 复核冻结时随快照冻结 WPS 方法窗口、仪表版本、每道实测参数/换算结果/
+  测温归属；`/diff` 的 `weld_pass_evaluation` 块给出 `old_codes`/`new_codes`、
+  `resolved`/`introduced`、`old/new_invalid_scopes` 与 `changed_scopes`
+  （invalid_to_valid / valid_to_invalid），施焊缝与返修范围共用同一结构。
+
 ## 五、项目结构
 
 ```
@@ -224,7 +281,8 @@ app/
   qualification.py  按时点匹配 WPS/PQR、焊工资格范围
   nde_resource.py   按整个实施时段核验 NDT 人员证书与设备版本
   consumables.py    焊材批次/烘干制度/烘箱保温筒/领用段/逐耗事件链核验（WM 系列）
-  engine.py         审查引擎：焊接资格 + NDT 资源 + 焊材链 + 检验批 + 返修/复检链
+  weld_execution.py 道次执行链：WPS 方法窗口/道次重建/热输入换算/测温/仪表（WP 系列）
+  engine.py         审查引擎：焊接资格 + NDT 资源 + 焊材链 + 道次链 + 检验批 + 返修链
   storage.py        SQLite：快照冻结、版本分支、差异
   svg.py            标色 SVG 焊口图
   main.py           FastAPI 路由

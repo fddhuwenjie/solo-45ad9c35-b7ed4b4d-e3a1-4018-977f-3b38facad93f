@@ -232,7 +232,20 @@ def render_weld_svg(verdict: dict) -> str:
         inner_lines.append(
             f"剔除报告: {verdict['nde_excluded_count']} 份（资源失效）"
         )
-    base_y = CY - 52 - (12 if cons_uses else 0)
+    wp_passes = verdict.get("weld_passes") or []
+    wp_extra = 0
+    if wp_passes:
+        wp_bad = sum(1 for q in wp_passes if not q.get("pass_valid", True))
+        inner_lines.append(
+            f"道次: {len(wp_passes)} 道（打底/填充/盖面）"
+            + (f" 越限{wp_bad}" if wp_bad else " 合规"))
+        wp_extra += 12
+    bad_repairs = [lk for lk in verdict.get("repairs", [])
+                   if lk.get("passes_valid") is False]
+    if bad_repairs:
+        inner_lines.append(f"返修道次违规: {len(bad_repairs)} 次（不得闭合）")
+        wp_extra += 12
+    base_y = CY - 52 - (12 if cons_uses else 0) - wp_extra
     for i, line in enumerate(inner_lines):
         parts.append(
             f'<text x="{CX}" y="{base_y + i * 24}" font-size="15" '

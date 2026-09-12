@@ -114,6 +114,11 @@ class WpsRecord(QualRange):
         description="WPS 规定的焊材分类号清单，如 ['E5015']（AWS A5.1/GB/T 5117 "
                     "焊条分类号）；焊材链启用时实际消耗批次分类号必须落在此清单内",
     )
+    process_windows: list[WpsProcessWindow] = Field(
+        default_factory=list,
+        description="按焊接方法冻结的道次参数窗口（极性/电流/电压/焊速/热输入/"
+                    "预热/层间温度）；道次链启用时实际道次方法必须在此登记",
+    )
 
 
 class WelderQual(QualRange):
@@ -404,6 +409,196 @@ class ConsumableUse(UtcModel):
     used_at: Optional[datetime] = None
 
 
+# ---------------------------------------------------------------- 焊接道次执行链
+#
+# WPS 版本除整体认可范围（有效期/组别/厚度/管径/方法）外，还按焊接方法冻结
+# 极性、电流、电压、热输入、预热与层间温度窗口（WpsProcessWindow）。
+# 逐焊口与逐返修提交道次记录 PassRecord：道次编号、起止时刻、焊工、方法、
+# 实测电流/电压、焊缝长度（燃弧时间可显式给出，缺省取起止时长），以及预热/
+# 层间温度测温记录 TemperatureMeasurement 与所用仪表（电流表/电压表/测温仪/
+# 计时器）的校准版本 WeldGaugeVersion。服务按时间与层序重建道次链并换算热输入
+# E = k·U·I·60/v（kJ/mm，v=焊缝长度/燃弧分钟数），返修混用参数同样定位到道次。
+
+Polarity = Literal["DCEN", "DCEP", "AC", "DC"]
+WeldGaugeKind = Literal[
+    "ammeter",       # 电流表
+    "voltmeter",     # 电压表
+    "thermometer",   # 测温仪（红外/接触式热电偶等）
+    "timer",         # 焊速计时
+    "weld_monitor",  # 焊接参数监测仪（电流/电压/焊速一体）
+    "other",
+]
+PassRole = Literal["root", "fill", "cap"]  # 打底(根焊)/填充/盖面
+PassScope = Literal["production", "repair"]
+
+
+class WpsProcessWindow(UtcModel):
+    """WPS 对单一焊接方法冻结的道次参数窗口（版本即随 WPS 记录冻结）。"""
+
+    process: str = Field(min_length=1, description="焊接方法代号，如 GTAW/SMAW")
+    polarity: list[Polarity] = Field(
+        min_length=1, description="允许极性清单，如 ['DCEP']；DC 表示不区分正反接"
+    )
+    current_min_a: float = Field(ge=0, description="电流下限(A)")
+    current_max_a: float = Field(gt=0, description="电流上限(A)")
+    voltage_min_v: float = Field(ge=0, description="电压下限(V)")
+    voltage_max_v: float = Field(gt=0, description="电压上限(V)")
+    travel_min_mm_min: Optional[float] = Field(
+        default=None, ge=0, description="焊速下限(mm/min)；不限制可留空"
+    )
+    travel_max_mm_min: Optional[float] = Field(
+        default=None, gt=0, description="焊速上限(mm/min)"
+    )
+    heat_input_min_kj_mm: Optional[float] = Field(
+        default=None, ge=0, description="热输入下限(kJ/mm)"
+    )
+    heat_input_max_kj_mm: Optional[float] = Field(
+        default=None, gt=0, description="热输入上限(kJ/mm)"
+    )
+    thermal_efficiency: float = Field(
+        default=0.8, gt=0, le=1.0,
+        description="热效率系数 k（GTAW≈0.75、SMAW≈0.8），用于热输入换算",
+    )
+    preheat_min_c: float = Field(
+        default=0.0, ge=0, description="首道起弧前预热温度下限(℃)"
+    )
+    preheat_lead_minutes: float = Field(
+        default=60.0, gt=0,
+        description="预热测温须在首道起弧前多长时间内完成（默认 60 分钟）",
+    )
+    interpass_min_c: Optional[float] = Field(
+        default=None, ge=0, description="层间温度下限(℃)；不限制留空"
+    )
+    interpass_max_c: float = Field(
+        gt=0, description="层间温度上限(℃)，如 200/250"
+    )
+
+    @model_validator(mode="after")
+    def _check_window(self) -> "WpsProcessWindow":
+        if self.current_max_a < self.current_min_a:
+            raise ValueError("current_max_a 不得小于 current_min_a")
+        if self.voltage_max_v < self.voltage_min_v:
+            raise ValueError("voltage_max_v 不得小于 voltage_min_v")
+        if (self.travel_min_mm_min is not None
+                and self.travel_max_mm_min is not None
+                and self.travel_max_mm_min < self.travel_min_mm_min):
+            raise ValueError("travel_max_mm_min 不得小于 travel_min_mm_min")
+        if (self.heat_input_min_kj_mm is not None
+                and self.heat_input_max_kj_mm is not None
+                and self.heat_input_max_kj_mm < self.heat_input_min_kj_mm):
+            raise ValueError("heat_input_max_kj_mm 不得小于 heat_input_min_kj_mm")
+        if self.interpass_min_c is not None \
+                and self.interpass_min_c > self.interpass_max_c:
+            raise ValueError("interpass_min_c 不得大于 interpass_max_c")
+        return self
+
+
+class WeldGaugeVersion(UtcModel):
+    """一只焊接测量仪表（电流表/电压表/测温仪/计时器/监测仪）的校准版本。
+
+    仪表编号不变、重新检定/校准即派生新版本（version 不同）；
+    道次与测温记录以 (gauge_id, version) 引用，校准失效按使用时点判定。
+    """
+
+    gauge_id: str = Field(min_length=1, description="仪表编号（同表跨版本稳定）")
+    version: str = Field(min_length=1, description="校准版本号，同表唯一")
+    name: str = Field(min_length=1)
+    kind: WeldGaugeKind
+    serial_no: str = Field(min_length=1)
+    calibrated_from: datetime
+    calibrated_to: datetime
+
+    @model_validator(mode="after")
+    def _check_window(self) -> "WeldGaugeVersion":
+        if _as_utc(self.calibrated_to) <= _as_utc(self.calibrated_from):
+            raise ValueError("calibrated_to 必须晚于 calibrated_from")
+        return self
+
+
+class GaugeUse(UtcModel):
+    """道次实施中对一个仪表校准版本的引用（实测参数来源可追溯）。"""
+
+    gauge_id: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    role: str = Field(
+        default="main",
+        description="用途：main=主监测；ammeter/voltmeter/thermometer/timer 等",
+    )
+
+
+class TemperatureMeasurement(UtcModel):
+    """预热/层间温度的一个测温测点记录。
+
+    归属：焊口施焊或某次返修；pass_no 给出该测温所对应的**道次**
+    （该道起弧前测得的层间温度；首道对应预热温度）。pass_no 缺省时由引擎
+    按时点（上一道结束 ~ 本道起弧之间）重建归属。
+    """
+
+    measure_id: str = Field(min_length=1, description="测温记录编号，包内唯一")
+    weld_no: str = Field(min_length=1)
+    scope: PassScope = Field(description="production=施焊前测温，repair=返修补焊测温")
+    repair_id: Optional[str] = Field(
+        default=None, description="scope=repair 时所属返修记录编号"
+    )
+    iteration: Optional[int] = Field(
+        default=None, ge=1, description="返修测温时的返修次序"
+    )
+    pass_no: Optional[int] = Field(
+        default=None, ge=1,
+        description="对应道次编号（该道起弧前的层间/预热温度）；缺省按时点重建",
+    )
+    measured_at: datetime = Field(description="测温时刻")
+    temp_c: float = Field(ge=0)
+    gauge_id: str = Field(min_length=1, description="测温仪表编号")
+    gauge_version: str = Field(min_length=1, description="测温仪表校准版本")
+    kind: Literal["preheat", "interpass"] = Field(
+        default="interpass",
+        description="preheat=首道起弧前预热温度；interpass=层间温度",
+    )
+
+
+class PassRecord(UtcModel):
+    """一道焊道的实际执行记录：打底/填充/盖面中的一道（多层多道）。"""
+
+    pass_id: str = Field(min_length=1, description="道次记录编号，包内唯一")
+    weld_no: str = Field(min_length=1)
+    scope: PassScope
+    repair_id: Optional[str] = Field(default=None, description="scope=repair 时必填")
+    iteration: Optional[int] = Field(
+        default=None, ge=1, le=2, description="返修道次的返修次序（1/2）"
+    )
+    pass_no: int = Field(ge=1, description="道次编号：1=首道(打底)，同范围连续")
+    layer_no: int = Field(
+        ge=1, description="层号：1=打底层，其后填充层，最大层为盖面层"
+    )
+    started_at: datetime = Field(description="起弧时刻")
+    finished_at: datetime = Field(description="收弧时刻（须严格晚于起弧）")
+    welder_id: str = Field(description="本道实际施焊焊工（须与焊口/返修登记一致）")
+    process: str = Field(min_length=1, description="本道实际焊接方法，如 GTAW")
+    polarity: Polarity = Field(description="本道实际极性")
+    current_a: float = Field(gt=0, description="本道实测电流(A)")
+    voltage_v: float = Field(gt=0, description="本道实测电弧电压(V)")
+    weld_length_mm: float = Field(gt=0, description="本道焊缝长度(mm)")
+    arc_minutes: Optional[float] = Field(
+        default=None, gt=0,
+        description="燃弧时间(分钟)；缺省按 finished_at-started_at 换算焊速",
+    )
+    gauges: list[GaugeUse] = Field(
+        default_factory=list,
+        description="本道实测所用仪表版本（电流/电压/焊速监测仪等）",
+    )
+
+    @model_validator(mode="after")
+    def _check_order(self) -> "PassRecord":
+        if _as_utc(self.finished_at) <= _as_utc(self.started_at):
+            raise ValueError("finished_at 必须严格晚于 started_at")
+        if self.scope == "repair" and not self.repair_id:
+            raise ValueError("scope=repair 的道次必须给出 repair_id")
+        if self.scope == "repair" and self.iteration is None:
+            raise ValueError("scope=repair 的道次必须给出 iteration")
+        return self
+
+
 # ---------------------------------------------------------------- 焊口本体
 
 
@@ -534,6 +729,19 @@ class SubmissionPayload(UtcModel):
     submitted_by: Optional[str] = None
     wps: list[WpsRecord] = Field(default_factory=list)
     welders: list[WelderQual] = Field(default_factory=list)
+    weld_gauges: list[WeldGaugeVersion] = Field(
+        default_factory=list,
+        description="焊接测量仪表（电流/电压/测温/计时/监测仪）校准版本登记，"
+                    "身份为 (gauge_id, version)，重新校准派生新版本",
+    )
+    weld_passes: list[PassRecord] = Field(
+        default_factory=list,
+        description="逐焊口/逐返修的道次执行记录；非空即启用道次执行链",
+    )
+    temperature_measurements: list[TemperatureMeasurement] = Field(
+        default_factory=list,
+        description="逐道次起弧前的预热/层间温度测温记录（含测温仪表版本）",
+    )
     nde_personnel: list[NdePersonnelCert] = Field(
         default_factory=list, description="无损检测人员证书登记（证号唯一）"
     )
@@ -587,6 +795,20 @@ class SubmissionPayload(UtcModel):
         if len(set(equip_keys)) != len(equip_keys):
             dupes = sorted({k for k in equip_keys if equip_keys.count(k) > 1})
             errors.append(f"NDT 设备版本标识重复 (equipment_id,version): {dupes}")
+
+        # ---- 焊接道次执行链身份唯一 ----
+        gauge_keys = [(g.gauge_id, g.version) for g in self.weld_gauges]
+        if len(set(gauge_keys)) != len(gauge_keys):
+            dupes = sorted({k for k in gauge_keys if gauge_keys.count(k) > 1})
+            errors.append(f"焊接仪表版本标识重复 (gauge_id,version): {dupes}")
+        pass_ids = [p.pass_id for p in self.weld_passes]
+        if len(set(pass_ids)) != len(pass_ids):
+            dupes = sorted({n for n in pass_ids if pass_ids.count(n) > 1})
+            errors.append(f"焊接道次记录编号重复: {dupes}")
+        measure_ids = [m.measure_id for m in self.temperature_measurements]
+        if len(set(measure_ids)) != len(measure_ids):
+            dupes = sorted({n for n in measure_ids if measure_ids.count(n) > 1})
+            errors.append(f"测温记录编号重复: {dupes}")
 
         # ---- 焊材链身份唯一（引用缺失不在此拒绝，沿用引擎挂条款口径）----
         def _dupe_ids(items, label: str, attr: str = None):
@@ -650,6 +872,42 @@ class SubmissionPayload(UtcModel):
                 )
             seen_repair.add(key)
 
+        # ---- 焊接道次执行链引用完整性 ----
+        # 同一焊口/返修范围内的道次重号、层序/时段问题不在此拒绝（由引擎按
+        # WP-PASS-DUP / WP-LAYER-GAP / WP-PASS-OVERLAP 挂条款并定位原始道次），
+        # 这里只拒绝跨实体的悬空引用与范围归属错误。
+        repair_index = {(r.weld_no, r.iteration): r for r in self.repairs}
+        for p in self.weld_passes:
+            if p.weld_no not in weld_set:
+                errors.append(f"道次 {p.pass_id} 引用不存在的焊口: {p.weld_no}")
+            if p.scope == "repair":
+                rep = repair_index.get((p.weld_no, p.iteration or -1))
+                if rep is None:
+                    errors.append(
+                        f"道次 {p.pass_id} 引用不存在的返修: "
+                        f"焊口 {p.weld_no} 第 {p.iteration} 次"
+                    )
+                elif p.repair_id != rep.repair_id:
+                    errors.append(
+                        f"道次 {p.pass_id} 的 repair_id {p.repair_id} 与焊口 "
+                        f"{p.weld_no} 第 {p.iteration} 次返修编号 "
+                        f"{rep.repair_id} 不一致"
+                    )
+        for m in self.temperature_measurements:
+            if m.weld_no not in weld_set:
+                errors.append(f"测温记录 {m.measure_id} 引用不存在的焊口: {m.weld_no}")
+            if m.scope == "repair":
+                rep = repair_index.get((m.weld_no, m.iteration or -1))
+                if rep is None:
+                    errors.append(
+                        f"测温记录 {m.measure_id} 引用不存在的返修: "
+                        f"焊口 {m.weld_no} 第 {m.iteration} 次"
+                    )
+                elif m.repair_id != rep.repair_id:
+                    errors.append(
+                        f"测温记录 {m.measure_id} 的 repair_id 与返修编号不一致"
+                    )
+
         if errors:
             raise ValueError("；".join(errors))
         return self
@@ -674,6 +932,8 @@ class Finding(BaseModel):
     bake_id: Optional[str] = None
     stay_id: Optional[str] = None
     use_id: Optional[str] = None
+    pass_id: Optional[str] = None
+    measure_id: Optional[str] = None
     evidence: dict = Field(default_factory=dict)
 
 
@@ -687,6 +947,13 @@ class RepairLink(BaseModel):
     excavated_band: dict
     reinspections: list[dict] = Field(default_factory=list)
     consumable_uses: list[dict] = Field(default_factory=list)
+    weld_passes: list[dict] = Field(
+        default_factory=list,
+        description="本次返修补焊的道次链重建结果（道次/热输入/测温/仪表）",
+    )
+    passes_valid: bool = Field(
+        default=True, description="返修道次链是否核验通过（False 时该次返修不得闭合）"
+    )
     closed: bool
 
 
@@ -705,6 +972,14 @@ class WeldVerdict(BaseModel):
     consumable_uses: list[dict] = Field(
         default_factory=list,
         description="施焊/返修实际消耗的焊材批次、领用段与事件链判定摘要",
+    )
+    weld_passes: list[dict] = Field(
+        default_factory=list,
+        description="本焊口施焊缝的道次链重建结果（按时间与层序排序）",
+    )
+    passes_valid: Optional[bool] = Field(
+        default=None,
+        description="施焊缝道次链核验是否通过；道次链未启用时为 null",
     )
     decision: Decision
     findings: list[Finding] = Field(default_factory=list)
@@ -757,6 +1032,11 @@ class ReviewPack(BaseModel):
         default_factory=dict,
         description="焊材批次/制度/烘箱保温筒版本/烘干/保温/领用段事件链目录"
                     "与失效消耗清单（规则摘要）",
+    )
+    weld_execution: dict = Field(
+        default_factory=dict,
+        description="WPS 方法参数窗口、焊接仪表版本登记目录，及逐焊口/返修的"
+                    "道次链核验状态与失效道次清单",
     )
     findings: list[Finding] = Field(default_factory=list)
     clauses_triggered: list[str] = Field(default_factory=list)
@@ -842,6 +1122,7 @@ class DiffReport(BaseModel):
     new_decision: Optional[str] = None
     evaluation: Optional[NdeEvaluation] = None
     consumable_evaluation: Optional["WmConsumableEvaluation"] = None
+    weld_pass_evaluation: Optional["WpPassEvaluation"] = None
 
 
 class WmUseState(BaseModel):
@@ -880,4 +1161,43 @@ class WmConsumableEvaluation(BaseModel):
     changed_uses: list[dict] = Field(
         default_factory=list,
         description="事件链核验状态发生变化的消耗（含批次、领用段、失效定位）",
+    )
+
+
+# ============================================================ 焊接道次执行链差异
+
+
+class WpPassState(BaseModel):
+    """一个焊口施焊范围（或某次返修）在一个版本下的道次链核验状态。"""
+
+    scope_key: str = Field(description="production:<weld_no> 或 repair:<repair_id>")
+    weld_no: str
+    scope: str
+    repair_id: Optional[str] = None
+    iteration: Optional[int] = None
+    wps_no: Optional[str] = None
+    pass_total: int = 0
+    pass_valid: bool
+    reasons: list[str] = Field(default_factory=list)
+    passes: list[dict] = Field(default_factory=list)
+
+
+class WpPassEvaluation(BaseModel):
+    """两版审查结论中焊接道次执行链核验状态的结构化对比。"""
+
+    old_decision: Optional[str] = None
+    new_decision: Optional[str] = None
+    old_codes: list[str] = Field(default_factory=list)
+    new_codes: list[str] = Field(default_factory=list)
+    resolved: list[str] = Field(
+        default_factory=list,
+        description="新版不再触发的 WP 条款（补录测温/重新校准/修正参数后消除）",
+    )
+    introduced: list[str] = Field(default_factory=list,
+                                  description="新版新触发的 WP 条款")
+    old_invalid_scopes: list[WpPassState] = Field(default_factory=list)
+    new_invalid_scopes: list[WpPassState] = Field(default_factory=list)
+    changed_scopes: list[dict] = Field(
+        default_factory=list,
+        description="道次链核验状态发生变化的焊口/返修（含失效道次与测点定位）",
     )

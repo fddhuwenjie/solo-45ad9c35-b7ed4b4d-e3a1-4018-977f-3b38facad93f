@@ -12,6 +12,11 @@ from datetime import datetime, timezone
 from app.schemas import (
     AngleBand,
     BakeCycle,
+    GaugeUse,
+    PassRecord,
+    TemperatureMeasurement,
+    WeldGaugeVersion,
+    WpsProcessWindow,
     ConsumableBatch,
     ConsumableContainerVersion,
     ConsumableIssueSegment,
@@ -99,10 +104,37 @@ def default_rt_uses():
     return [NdeEquipmentUse(equipment_id="XR-250", version="2026A", role="main")]
 
 
+def wps_process_window(process: str = "GTAW", **kw):
+    """单方法道次参数窗口工厂（极性/电流/电压/焊速/热输入/预热/层间温度）。"""
+    defaults = {
+        "GTAW": dict(polarity=["DCEN"], current=(80, 130), voltage=(9, 14),
+                     travel=(50, 160), heat_max=2.5, k=0.75),
+        "SMAW": dict(polarity=["DCEP"], current=(100, 160), voltage=(20, 26),
+                     travel=(50, 150), heat_max=2.5, k=0.8),
+    }[process]
+    cur = kw.pop("current", defaults["current"])
+    vol = kw.pop("voltage", defaults["voltage"])
+    travel = kw.pop("travel", defaults["travel"])
+    heat = kw.pop("heat", (None, defaults["heat_max"]))
+    base = dict(
+        process=process,
+        polarity=list(defaults["polarity"]),
+        current_min_a=cur[0], current_max_a=cur[1],
+        voltage_min_v=vol[0], voltage_max_v=vol[1],
+        travel_min_mm_min=travel[0], travel_max_mm_min=travel[1],
+        heat_input_min_kj_mm=heat[0], heat_input_max_kj_mm=heat[1],
+        thermal_efficiency=defaults["k"],
+        preheat_min_c=100.0, preheat_lead_minutes=60.0,
+        interpass_min_c=80.0, interpass_max_c=200.0,
+    )
+    base.update(kw)
+    return WpsProcessWindow(**base)
+
+
 def wps(no: str = "WPS-101", groups=("Fe-1",), tmin=3.0, tmax=20.0,
         dmin=25.0, dmax=600.0, processes=("GTAW", "SMAW"),
         positions=("5G", "6G"), supported=True,
-        consumable_classes=("E5015",)):
+        consumable_classes=("E5015",), with_windows=False):
     return WpsRecord(
         wps_no=no,
         pqr_no="PQR-101",
@@ -117,6 +149,9 @@ def wps(no: str = "WPS-101", groups=("Fe-1",), tmin=3.0, tmax=20.0,
         positions=list(positions),
         supported_by_pqr=supported,
         consumable_classes=list(consumable_classes),
+        process_windows=([wps_process_window("GTAW"),
+                          wps_process_window("SMAW")]
+                         if with_windows else []),
     )
 
 
@@ -423,6 +458,195 @@ def valid_consumable_chain(welds, repairs=(), *, batch_id="WM-E5015-2602",
         "consumable_segments": segments,
         "consumable_events": events,
     }
+
+
+# ============================================================ 焊接道次执行链
+#
+# 每道焊口默认三道：GTAW 打底（根焊）+ SMAW 填充 + SMAW 盖面；
+# 道次时段排在同日 09:00 完工时刻之前（同日多口按 2 小时槽位错开，
+# 同一焊工不跨口时段重叠）。每道起弧前有预热/层间测温，仪表校准全年有效。
+# 焊速 v=焊缝长度/燃弧时间，热输入 E=k·U·I·60/v，默认参数全部落在 WPS 窗口。
+
+
+def weld_gauges(*, calibrated_to="2026-12-31T23:59:59Z"):
+    """默认：焊接监测仪 WM-1（电流/电压/焊速）+ 测温仪 TM-1，校准覆盖全年。"""
+    return [
+        WeldGaugeVersion(
+            gauge_id="WM-1", version="2026A", name="焊接参数监测仪",
+            kind="weld_monitor", serial_no="SN-WM-1",
+            calibrated_from="2026-01-01T00:00:00Z",
+            calibrated_to=calibrated_to),
+        WeldGaugeVersion(
+            gauge_id="TM-1", version="2026A", name="表面测温仪",
+            kind="thermometer", serial_no="SN-TM-1",
+            calibrated_from="2026-01-01T00:00:00Z",
+            calibrated_to=calibrated_to),
+    ]
+
+
+def _dt(day, hh, mm):
+    return datetime(2026, 3, day, hh, mm, tzinfo=timezone.utc)
+
+
+# 默认三道：(层号, 方法, 极性, 电流A, 电压V, 长度mm, 燃弧min,
+#           起弧距完工分钟, 时长min)
+_DEFAULT_PASSES = [
+    (1, "GTAW", "DCEN", 95.0, 11.5, 359.0, 4.0, 30, 10),
+    (2, "SMAW", "DCEP", 120.0, 22.0, 359.0, 4.5, 19, 7),
+    (3, "SMAW", "DCEP", 125.0, 22.0, 359.0, 3.5, 9, 5),
+]
+# 测温：(对应道次, 类型, 测温距完工分钟, 温度℃)
+# 测温时点须落在 上一道收弧后、本道起弧前：
+# 道1 [completed-40, completed-30]；道2 [completed-26, completed-19]；
+# 道3 [completed-14, completed-9]。预热在道1起弧前，层间分别取区间中值。
+_DEFAULT_MEASURES = [
+    (1, "preheat", 42, 120.0),
+    (2, "interpass", 28, 150.0),
+    (3, "interpass", 16, 160.0),
+]
+
+
+def weld_pass_chain(welds, repairs=(), *, gauges=None,
+                    weld_overrides=None, repair_overrides=None,
+                    measure_skip=None, monitor_gauge=("WM-1", "2026A"),
+                    temp_gauge=("TM-1", "2026A")):
+    """为给定焊口/返修构造合规的道次与测温记录。
+
+    同日多口按 2 小时槽位向完工时刻 09:00（返修 10:00）之前排程，同一焊工
+    不跨口时段重叠。
+    weld_overrides: {weld_no: {pass_no: PassRecord 字段覆盖}}；
+    repair_overrides: {repair_id: {pass_no: ...}}；
+    measure_skip: {"weld": {weld_no: {pass_no,...}},
+                   "repair": {repair_id: {pass_no,...}}} 跳过测温（采样缺失）。
+    返回 (gauges, passes, measurements)（gauges 缺省为全年有效默认版本）。
+    """
+    from datetime import timedelta as _td
+
+    gauges = gauges if gauges is not None else weld_gauges()
+    weld_overrides = weld_overrides or {}
+    repair_overrides = repair_overrides or {}
+    measure_skip = measure_skip or {"weld": {}, "repair": {}}
+    passes: list = []
+    measures: list = []
+    seq = 0
+
+    def emit_scope(owner_no, completed, overrides, *, scope,
+                   repair_id=None, iteration=None, welder_id="W-001",
+                   skip_set=None):
+        nonlocal seq
+        skip_set = skip_set or set()
+        for no, spec_row in enumerate(_DEFAULT_PASSES, start=1):
+            layer, proc, pol, cur, vol, length, arc, soff, dur = spec_row
+            seq += 1
+            t1 = completed - _td(minutes=soff)
+            t0 = t1 - _td(minutes=dur)
+            data = dict(
+                pass_id=f"WP-{seq:03d}", weld_no=owner_no, scope=scope,
+                repair_id=repair_id, iteration=iteration,
+                pass_no=no, layer_no=layer, started_at=t0, finished_at=t1,
+                welder_id=welder_id, process=proc, polarity=pol,
+                current_a=cur, voltage_v=vol, weld_length_mm=length,
+                arc_minutes=arc,
+                gauges=[GaugeUse(gauge_id=monitor_gauge[0],
+                                 version=monitor_gauge[1], role="main")])
+            data.update(overrides.get(no, {}))
+            data["pass_no"] = no
+            passes.append(PassRecord(**data))
+        for no, kind, moff, temp in _DEFAULT_MEASURES:
+            if no in skip_set:
+                continue
+            seq += 1
+            measures.append(TemperatureMeasurement(
+                measure_id=f"TM-{seq:03d}", weld_no=owner_no, scope=scope,
+                repair_id=repair_id, iteration=iteration, pass_no=no,
+                measured_at=completed - _td(minutes=moff), temp_c=temp,
+                gauge_id=temp_gauge[0], gauge_version=temp_gauge[1],
+                kind=kind))
+
+    days: dict[int, int] = {}
+    for w in sorted(welds, key=lambda x: x.weld_no):
+        day = w.welded_at.day
+        slot = days.get(day, 0)
+        days[day] = slot + 1
+        completed = _dt(day, 9, 0) - _td(hours=2 * slot)
+        emit_scope(w.weld_no, completed,
+                   weld_overrides.get(w.weld_no, {}), scope="production",
+                   welder_id=w.welder_id,
+                   skip_set=measure_skip["weld"].get(w.weld_no))
+    rdays: dict[tuple[int, str], int] = {}
+    for r in sorted(repairs, key=lambda x: (x.weld_no, x.iteration)):
+        day = r.repaired_at.day
+        slot = rdays.get((day, r.weld_no), 0)
+        rdays[(day, r.weld_no)] = slot + 1
+        completed = _dt(day, 10, 0) - _td(hours=2 * slot)
+        emit_scope(r.weld_no, completed,
+                   repair_overrides.get(r.repair_id, {}), scope="repair",
+                   repair_id=r.repair_id, iteration=r.iteration,
+                   welder_id=r.welder_id,
+                   skip_set=measure_skip["repair"].get(r.repair_id))
+    return gauges, passes, measures
+
+
+def weld_pass_failure_payload() -> SubmissionPayload:
+    """场景六：道次执行链失效（参数越限/层间高温/仪表校准失效/采样缺失）。
+
+    以缺陷扩检样例为底（一次返修链已闭合、焊材链合规），叠加：
+    - WPS-101 冻结 GTAW/SMAW 道次参数窗口；
+    - W-007 盖面道电流 200A，超 SMAW 窗口（WP-CURRENT-OUTSIDE）；
+    - W-008 填充道起弧前层间温度 240℃，超 200℃ 上限
+      （WP-INTERPASS-HIGH）；
+    - W-009 漏登填充道前测温（WP-INTERPASS-MISSING，采样缺失）；
+    - 监测仪表 WM-1 校准在 3/4 到期（未登记重新校准版本），W-001 一次
+      返修（3/5 补焊）道次全部落在校准失效区间（WP-GAUGE-CALIBRATION），
+      且盖面道电流 180A 超 SMAW 窗口（返修混用参数，WP-CURRENT-OUTSIDE）；
+    即使返修后的复检 RT 合格，也触发 WP-REPAIR-PASS-INVALID，该次返修
+    不得闭合——最终合格报告不得掩盖道次违规，相关焊口保持 hold。
+    """
+    base = extension_payload().model_copy(deep=True)
+    for wpsrec in base.wps:
+        wpsrec.process_windows = [wps_process_window("GTAW"),
+                                  wps_process_window("SMAW")]
+
+    # 监测仪 WM-1 校准 3/4 到期（测温仪 TM-1 保持全年有效）
+    gauges = weld_gauges()
+    gauges[0].calibrated_to = datetime(2026, 3, 4, 0, 0, tzinfo=timezone.utc)
+
+    measure_skip = {"weld": {"W-009": {2}}, "repair": {}}
+    gauges, passes, measures = weld_pass_chain(
+        base.welds, base.repairs, gauges=gauges,
+        weld_overrides={
+            "W-007": {3: {"current_a": 200.0}},
+            "W-008": {},
+        },
+        repair_overrides={
+            "R-001": {3: {"current_a": 180.0}},
+        },
+        measure_skip=measure_skip)
+    # W-008 填充道层间温度改为 240℃（超 200℃ 上限）
+    for m in measures:
+        if m.weld_no == "W-008" and m.scope == "production" and m.pass_no == 2:
+            m.temp_c = 240.0
+
+    return SubmissionPayload(
+        package_ref="DEMO-6-WELD-PASS",
+        line_no=base.line_no,
+        submitted_by=base.submitted_by,
+        wps=base.wps,
+        welders=base.welders,
+        nde_personnel=base.nde_personnel,
+        nde_equipment=base.nde_equipment,
+        weld_gauges=gauges,
+        weld_passes=passes,
+        temperature_measurements=measures,
+        welds=base.welds,
+        nde=base.nde,
+        repairs=base.repairs,
+        lot_rules=base.lot_rules,
+        **{k: getattr(base, k) for k in (
+            "consumable_batches", "consumable_rules",
+            "consumable_containers", "bake_cycles", "quiver_stays",
+            "consumable_segments", "consumable_events")},
+    )
 
 
 # ============================================================ 场景一：直接放行
