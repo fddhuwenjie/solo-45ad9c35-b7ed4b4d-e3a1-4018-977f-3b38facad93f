@@ -138,7 +138,8 @@ CLAUSES: dict[str, dict[str, str]] = {
         "category": ClauseCategory.NDE.value,
         "reference": "NB/T 47013：持证检测技术范围应覆盖实际工艺"
                      "（如 TOFD/PA、数字射线、渗透剂类型）",
-        "message": "实际检测技术超出人员证书认可的检测技术范围",
+        "message": "实际检测技术超出人员证书认可的检测技术范围"
+                   "（证书技术范围留空不能采信）",
     },
     "NR-CERT-EXPIRED": {
         "severity": Severity.HOLD.value,
@@ -203,6 +204,31 @@ CLAUSES: dict[str, dict[str, str]] = {
                      "不得计入抽检、扩检与返修复检",
         "message": "该检测报告因 NDT 资源核验未通过，已从抽检/扩检/返修复检"
                    "计数中剔除（同一张底片不能既覆盖焊缝又覆盖资源资格）",
+    },
+    "NR-RECORD-PERIOD-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "质量记录完整性：检测报告应如实记录实施起止时刻，"
+                     "不得仅以报告时刻倒推替代",
+        "message": "检测记录缺少实施开始/结束时刻（started_at/finished_at），"
+                   "无法证明整个实施时段持续有效，不得以 examined_at 替代",
+    },
+    "NR-EQUIP-SPEC-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013：探伤仪应登记有效量程、射线源应登记能量范围，"
+                     "能力参数缺失的设备版本不得放行",
+        "message": "设备版本缺少与方法对应的能力规格"
+                   "（射线源未登记能量范围，或 UT 主机未登记量程）",
+    },
+    "NR-RECORD-PARAMETER-MISSING": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.NDE.value,
+        "reference": "NB/T 47013：检测记录应载明实际工艺参数"
+                     "（UT 声程/壁厚、RT 曝光能量），缺失即无法核对设备匹配",
+        "message": "检测记录缺少与方法对应的实际参数"
+                   "（UT 未登记 applied_thickness_mm 或 RT 未登记 "
+                   "exposure_energy_kev），不得以空值绕过设备能力核对",
     },
     # ---- 检验批 ----
     "LT-RULE-MISSING": {

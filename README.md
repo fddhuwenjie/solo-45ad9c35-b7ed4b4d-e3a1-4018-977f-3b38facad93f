@@ -139,8 +139,13 @@ curl -s "localhost:8000/packages/$PID/welds/W-001/svg?version=1" -o w001.svg
 - 人员证书逐角色核对方法、级别（实施≥I、复核≥II）、产品类别
   （焊口 `product`，默认 `pressure_pipe`）、技术范围与有效期；
   实施与复核同一证书判 `NR-ROLE-CONFLICT`；
+  **技术范围留空或记录未声明技术均不采信**（`NR-CERT-TECHNIQUE`）；
+- 检测记录必须显式登记 `started_at`/`finished_at`，缺任一项即
+  `NR-RECORD-PERIOD-MISSING`，不得用 `examined_at` 倒推替代；
 - 设备版本核对方法适用、校准有效期**持续覆盖整段时段**（夜班跨过到期点即失效）、
   UT 量程覆盖实际声程、射线源能量范围覆盖实际曝光能量；
+  **射线源必须登记能量范围、UT 主机必须登记量程**（缺规格 `NR-EQUIP-SPEC-MISSING`），
+  记录必须载明实际参数（缺参数 `NR-RECORD-PARAMETER-MISSING`），不得以空值绕过；
   RT 必须有胶片/IP 附件、UT 必须有探头，附件可随设备版本 `uses` 登记
   或在检测记录上直接挂载，附件自身同样须在校准有效期内；
 - 任一资源核验未通过：该报告从抽检/扩检口数、扩检触发与返修链中剔除
@@ -149,7 +154,11 @@ curl -s "localhost:8000/packages/$PID/welds/W-001/svg?version=1" -o w001.svg
   逐份列焊口、报告号、时段与失效原因码；
 - 复核签字冻结资源摘要：检测记录的 `resource` 字段内嵌当时所用证书
   （证号/级别/有效期）与设备版本（编号/版本/序列号/校准期/量程能量/附件）；
-  续证与重新校准产生新证书或新设备版本，旧版快照与 diff 均不被改写。
+  续证与重新校准产生新证书或新设备版本，旧版快照与 diff 均不被改写；
+  `/diff` 的 `evaluation` 块对比两版资源核验状态：旧版 hold 因续期变 release 时，
+  `old_codes` 仍保留 `NR-CERT-EXPIRED`，`resolved`/`introduced` 标注条款消长，
+  `old_invalid_reports`/`new_invalid_reports` 逐份给出焊口、报告、时段、
+  失效原因与所用证书/设备版本，`changed_reports` 标出 invalid_to_valid 等状态翻转。
 
 ## 五、项目结构
 

@@ -368,6 +368,82 @@ def diff_snapshots(old: dict, new: dict) -> list[dict]:
     return changes
 
 
+def _nde_report_states(pkg: dict) -> dict[str, dict]:
+    """从冻结评估结果抽取每份报告的资源核验状态（含失效详情与资源版本）。"""
+    result = pkg.get("result", {})
+    states: dict[str, dict] = {}
+    for w in result.get("welds", []):
+        for n in w.get("nde", []):
+            res = n.get("resource") or {}
+            states[n["nde_id"]] = {
+                "nde_id": n["nde_id"],
+                "report_no": n.get("report_no"),
+                "weld_no": n.get("weld_no", w["weld_no"]),
+                "method": n.get("method"),
+                "iteration": n.get("iteration", 0),
+                "resource_valid": bool(n.get("resource_valid", True)),
+                "period": res.get("period"),
+                "reasons": sorted({f.get("code") for f in res.get("failures", [])
+                                   if f.get("code")}),
+                "examiner_cert_no": (res.get("examiner") or {}).get("cert_no"),
+                "reviewer_cert_no": (res.get("reviewer") or {}).get("cert_no"),
+                "equipment": [
+                    {"equipment_id": e.get("equipment_id"),
+                     "version": e.get("version"), "role": e.get("role"),
+                     "serial_no": e.get("serial_no"),
+                     "calibrated_from": e.get("calibrated_from"),
+                     "calibrated_to": e.get("calibrated_to")}
+                    for e in res.get("equipment", [])
+                ],
+            }
+    return states
+
+
+def _nde_evaluation(old_pkg: dict, new_pkg: dict) -> dict:
+    """对比两版 NDT 资源核验结论：保留旧版失效条款/报告并呈现状态变化。"""
+    old_result, new_result = old_pkg["result"], new_pkg["result"]
+    old_codes = sorted(old_result.get("clauses_triggered", []))
+    new_codes = sorted(new_result.get("clauses_triggered", []))
+    old_nr = {c for c in old_codes if c.startswith("NR-")}
+    new_nr = {c for c in new_codes if c.startswith("NR-")}
+
+    old_states = _nde_report_states(old_pkg)
+    new_states = _nde_report_states(new_pkg)
+
+    def _invalid(states: dict[str, dict]) -> list[dict]:
+        return [s for s in states.values() if not s["resource_valid"]]
+
+    changed_reports: list[dict] = []
+    for nde_id in sorted(set(old_states) | set(new_states)):
+        o, n = old_states.get(nde_id), new_states.get(nde_id)
+        ov = o["resource_valid"] if o else None
+        nv = n["resource_valid"] if n else None
+        if ov == nv:
+            continue
+        changed_reports.append({
+            "nde_id": nde_id,
+            "change": "valid_to_invalid" if ov and not nv
+            else ("invalid_to_valid" if not ov and nv else "presence_changed"),
+            "old": o,
+            "new": n,
+        })
+
+    return {
+        "old_decision": old_result.get("decision"),
+        "new_decision": new_result.get("decision"),
+        "old_codes": old_codes,
+        "new_codes": new_codes,
+        # 已消除/新引入的 NR 条款：旧版 NR-CERT-EXPIRED 仍保留在 old_codes
+        "resolved": sorted(old_nr - new_nr),
+        "introduced": sorted(new_nr - old_nr),
+        "old_invalid_reports": sorted(
+            _invalid(old_states), key=lambda s: s["nde_id"]),
+        "new_invalid_reports": sorted(
+            _invalid(new_states), key=lambda s: s["nde_id"]),
+        "changed_reports": changed_reports,
+    }
+
+
 def diff_versions(old_pkg: dict, new_pkg: dict) -> dict:
     changes = diff_snapshots(old_pkg["snapshot"], new_pkg["snapshot"])
     return {
@@ -378,4 +454,5 @@ def diff_versions(old_pkg: dict, new_pkg: dict) -> dict:
         "decision_changed": old_pkg["decision"] != new_pkg["decision"],
         "old_decision": old_pkg["decision"],
         "new_decision": new_pkg["decision"],
+        "evaluation": _nde_evaluation(old_pkg, new_pkg),
     }

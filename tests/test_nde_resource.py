@@ -400,6 +400,188 @@ def test_excluded_report_still_listed_but_flagged_in_weld_nde():
                for x in nde["resource"]["failures"])
 
 
+# ---------------------------------------------------------------- 绕过修复：
+# 缺起止时刻 / 证书技术范围为空 / 射线源能量范围缺失，均不得放行
+
+
+def test_missing_started_at_excludes_report():
+    p = direct_release_payload().model_copy(deep=True)
+    p.nde[0].started_at = None  # 不得回落到 examined_at
+    r = evaluate(p)
+    codes = _weld_codes(p, "W-001")
+    assert "NR-RECORD-PERIOD-MISSING" in codes
+    assert "NR-RECORD-EXCLUDED" in codes
+    assert r["decision"] == "hold"
+    # 时段缺失仍带出 examined 时刻作为报告定位（不静默倒推为合规时段）
+    f = next(f for f in r["findings"]
+             if f["code"] == "NR-RECORD-PERIOD-MISSING")
+    assert f["evidence"]["missing"] == ["started_at"]
+
+
+def test_missing_finished_at_excludes_report():
+    p = direct_release_payload().model_copy(deep=True)
+    p.nde[0].finished_at = None
+    codes = _weld_codes(p, "W-001")
+    assert "NR-RECORD-PERIOD-MISSING" in codes
+    assert "NR-RECORD-EXCLUDED" in codes
+
+
+def test_missing_period_report_excluded_from_sampling():
+    """缺时段的报告不得计入抽检口数。"""
+    p = direct_release_payload().model_copy(deep=True)
+    for rec in p.nde:
+        rec.started_at = None
+        rec.finished_at = None
+    r = evaluate(p)
+    lot = r["lot_summaries"][0]
+    assert lot["examined_final"] == 0
+    assert "LT-SAMPLE-INSUFFICIENT" in {f["code"] for f in lot["findings"]}
+    assert {x["nde_id"] for x in lot["excluded_reports"]} == {"N-001", "N-002"}
+
+
+def test_missing_period_report_cannot_close_repair():
+    """缺时段的复检片不得作为返修复检依据。"""
+    p = extension_payload().model_copy(deep=True)
+    n051 = next(r for r in p.nde if r.nde_id == "N-051")
+    n051.started_at = None
+    n051.finished_at = None
+    v = _verdict(p, "W-001")
+    codes = {f["code"] for f in v["findings"]}
+    assert "NR-RECORD-PERIOD-MISSING" in codes
+    assert "RP-NO-REINSPECTION" in codes
+    assert v["repairs"][0]["closed"] is False
+
+
+def test_empty_cert_techniques_does_not_bypass():
+    """证书 techniques 留空不得解释为全技术认可。"""
+    p = direct_release_payload().model_copy(deep=True)
+    p.nde_personnel[0].techniques = []
+    codes = _weld_codes(p, "W-001")
+    assert "NR-CERT-TECHNIQUE" in codes
+    assert "NR-RECORD-EXCLUDED" in codes
+    # 证据呈现证书空范围与实际技术
+    f = next(f for f in evaluate(p)["findings"]
+             if f["code"] == "NR-CERT-TECHNIQUE"
+             and f["evidence"].get("role") == "examiner")
+    assert f["evidence"]["techniques"] == []
+    assert f["evidence"]["technique"] == "film"
+
+
+def test_undeclared_record_technique_does_not_bypass():
+    """检测记录未声明技术也无法核对，不得放行。"""
+    p = direct_release_payload().model_copy(deep=True)
+    p.nde[0].technique = None
+    codes = _weld_codes(p, "W-001")
+    assert "NR-CERT-TECHNIQUE" in codes
+    assert "NR-EQUIP-TECHNIQUE" in codes
+
+
+def test_xray_source_without_energy_range_excludes_report():
+    """射线源未登记能量范围：即使记录给了能量也无法核对；不给能量同样不得绕过。"""
+    p = direct_release_payload().model_copy(deep=True)
+    xray = next(e for e in p.nde_equipment if e.equipment_id == "XR-250")
+    xray.energy_min_kev = None
+    xray.energy_max_kev = None
+    codes = _weld_codes(p, "W-001")
+    assert "NR-EQUIP-SPEC-MISSING" in codes
+    assert "NR-RECORD-EXCLUDED" in codes
+
+
+def test_missing_exposure_energy_in_record_excludes_report():
+    """记录不填曝光能量，不得绕过源能力核对。"""
+    p = direct_release_payload().model_copy(deep=True)
+    p.nde[0].exposure_energy_kev = None
+    codes = _weld_codes(p, "W-001")
+    assert "NR-RECORD-PARAMETER-MISSING" in codes
+    assert "NR-RECORD-EXCLUDED" in codes
+
+
+def test_ut_detector_without_range_excludes_report():
+    """UT 主机未登记量程：能力规格缺失。"""
+    p = direct_release_payload().model_copy(deep=True)
+    utd = NdeEquipmentVersion(
+        equipment_id="UTD-100", version="2026A", name="超声探伤仪",
+        kind="ut_flaw_detector", method="UT", serial_no="SN-U",
+        calibrated_from="2026-01-01T00:00:00Z",
+        calibrated_to="2026-12-31T23:59:59Z",
+        techniques=["pulse_echo"], range_min_mm=None, range_max_mm=None)
+    probe = NdeEquipmentVersion(
+        equipment_id="PRB-5P", version="2026A", name="探头", kind="ut_probe",
+        method="UT", serial_no="SN-P",
+        calibrated_from="2026-01-01T00:00:00Z",
+        calibrated_to="2026-12-31T23:59:59Z",
+        techniques=["pulse_echo"], range_min_mm=0, range_max_mm=100)
+    p.nde_equipment = [utd, probe]
+    p.nde_personnel = [
+        NdePersonnelCert(cert_no="NU-Z", name="UT-II-张", method="UT",
+                         level="II", products=["pressure_pipe"],
+                         techniques=["pulse_echo"],
+                         valid_from="2026-01-01T00:00:00Z",
+                         valid_to="2026-12-31T23:59:59Z"),
+        NdePersonnelCert(cert_no="NU-L", name="UT-II-李", method="UT",
+                         level="II", products=["pressure_pipe"],
+                         techniques=["pulse_echo"],
+                         valid_from="2026-01-01T00:00:00Z",
+                         valid_to="2026-12-31T23:59:59Z"),
+    ]
+    rec = p.nde[0]
+    rec.method = "UT"
+    rec.technique = "pulse_echo"
+    rec.applied_thickness_mm = 12.0
+    rec.exposure_energy_kev = None
+    rec.examiner_cert_no = "NU-Z"
+    rec.reviewer_cert_no = "NU-L"
+    rec.equipment_uses = [
+        NdeEquipmentUse(equipment_id="UTD-100", version="2026A", role="main"),
+        NdeEquipmentUse(equipment_id="PRB-5P", version="2026A", role="probe"),
+    ]
+    codes = _weld_codes(p, "W-001")
+    assert "NR-EQUIP-SPEC-MISSING" in codes
+
+
+def test_missing_applied_thickness_in_ut_record_excludes_report():
+    """UT 记录不填实际声程，不得绕过量程核对。"""
+    p = direct_release_payload().model_copy(deep=True)
+    utd = NdeEquipmentVersion(
+        equipment_id="UTD-100", version="2026A", name="超声探伤仪",
+        kind="ut_flaw_detector", method="UT", serial_no="SN-U",
+        calibrated_from="2026-01-01T00:00:00Z",
+        calibrated_to="2026-12-31T23:59:59Z",
+        techniques=["pulse_echo"], range_min_mm=0, range_max_mm=500)
+    probe = NdeEquipmentVersion(
+        equipment_id="PRB-5P", version="2026A", name="探头", kind="ut_probe",
+        method="UT", serial_no="SN-P",
+        calibrated_from="2026-01-01T00:00:00Z",
+        calibrated_to="2026-12-31T23:59:59Z",
+        techniques=["pulse_echo"], range_min_mm=0, range_max_mm=100)
+    p.nde_equipment = [utd, probe]
+    p.nde_personnel = [
+        NdePersonnelCert(cert_no="NU-Z", name="UT-II-张", method="UT",
+                         level="II", products=["pressure_pipe"],
+                         techniques=["pulse_echo"],
+                         valid_from="2026-01-01T00:00:00Z",
+                         valid_to="2026-12-31T23:59:59Z"),
+        NdePersonnelCert(cert_no="NU-L", name="UT-II-李", method="UT",
+                         level="II", products=["pressure_pipe"],
+                         techniques=["pulse_echo"],
+                         valid_from="2026-01-01T00:00:00Z",
+                         valid_to="2026-12-31T23:59:59Z"),
+    ]
+    rec = p.nde[0]
+    rec.method = "UT"
+    rec.technique = "pulse_echo"
+    rec.applied_thickness_mm = None
+    rec.exposure_energy_kev = None
+    rec.examiner_cert_no = "NU-Z"
+    rec.reviewer_cert_no = "NU-L"
+    rec.equipment_uses = [
+        NdeEquipmentUse(equipment_id="UTD-100", version="2026A", role="main"),
+        NdeEquipmentUse(equipment_id="PRB-5P", version="2026A", role="probe"),
+    ]
+    codes = _weld_codes(p, "W-001")
+    assert "NR-RECORD-PARAMETER-MISSING" in codes
+
+
 # ---------------------------------------------------------------- 冻结/续证/差异
 
 
@@ -493,3 +675,144 @@ def test_equipment_version_diff_uses_composite_key(tmp_path, monkeypatch):
         keys = {(d["section"], d["kind"], d["key"]) for d in diff["changes"]}
         assert ("nde_equipment", "removed", "XR-250/2026A") in keys
         assert ("nde_equipment", "added", "XR-250/2026B") in keys
+
+
+# ---------------------------------------------------------------- 续期差异回归
+
+
+def _client(tmp_path, monkeypatch, name="renew.db"):
+    import importlib
+    from fastapi.testclient import TestClient
+    db = tmp_path / name
+    monkeypatch.setenv("WELD_DB_PATH", str(db))
+    import app.main as main
+    importlib.reload(main)
+    main.store = main.Store(str(db))
+    return main, TestClient(main.app)
+
+
+def test_diff_preserves_expired_cert_when_renewal_changes_hold_to_release(
+        tmp_path, monkeypatch):
+    """v1 因证书跨过到期点为 hold；续期后 v2 release：diff 保留 NR-CERT-EXPIRED
+    并带出 invalid_reports、resource_valid 等失效详情。"""
+    main, client = _client(tmp_path, monkeypatch)
+
+    v1 = direct_release_payload().model_dump(mode="json")
+    # 两张抽检片均在 3 月，实施人证 3/1 即到期 -> v1 整批 hold
+    for c in v1["nde_personnel"]:
+        c["valid_to"] = "2026-03-01T00:00:00Z"
+    with client:
+        r = client.post("/packages", json=v1)
+        assert r.status_code == 200, r.text
+        pid = r.json()["package_id"]
+        assert r.json()["decision"] == "hold"
+        client.post(f"/packages/{pid}/review", json={"reviewer": "李"})
+
+        v2 = direct_release_payload().model_dump(mode="json")
+        for c in v2["nde_personnel"]:
+            c["valid_to"] = "2026-12-31T23:59:59Z"  # 续期
+        r2 = client.post(f"/packages/{pid}/revisions", json=v2)
+        assert r2.status_code == 200, r2.text
+        assert r2.json()["decision"] == "release"
+
+        diff = client.get(
+            f"/packages/{pid}/diff?from_version=1&to_version=2").json()
+
+    assert diff["decision_changed"] is True
+    assert diff["old_decision"] == "hold" and diff["new_decision"] == "release"
+    ev = diff["evaluation"]
+    # 旧版 NR-CERT-EXPIRED 被完整保留在 old_codes
+    assert "NR-CERT-EXPIRED" in ev["old_codes"]
+    assert "NR-CERT-EXPIRED" in ev["resolved"]
+    assert "NR-CERT-EXPIRED" not in ev["new_codes"]
+    # 旧版失效报告清单与详情
+    old_invalid = {s["nde_id"]: s for s in ev["old_invalid_reports"]}
+    assert {"N-001", "N-002"} <= set(old_invalid)
+    s = old_invalid["N-001"]
+    assert s["resource_valid"] is False
+    assert "NR-CERT-EXPIRED" in s["reasons"]
+    assert s["weld_no"] == "W-001"
+    assert s["report_no"] == "RT-2026-N-001"
+    assert s["examiner_cert_no"] == "NRT-II-ZHANG"
+    assert s["period"]["finished_at"].startswith("2026-03-")
+    # 新版无失效报告
+    assert ev["new_invalid_reports"] == []
+    # 状态变化明细：旧失效 -> 新有效，并保留两侧资源核验状态
+    changed = {c["nde_id"]: c for c in ev["changed_reports"]}
+    assert {"N-001", "N-002"} <= set(changed)
+    assert changed["N-001"]["change"] == "invalid_to_valid"
+    assert changed["N-001"]["old"]["resource_valid"] is False
+    assert changed["N-001"]["new"]["resource_valid"] is True
+    assert changed["N-001"]["new"]["equipment"]
+    # 快照差异本身仍记录证书 valid_to 的修改
+    cert_fields = {(d["section"], d["key"], d["field"])
+                   for d in diff["changes"]}
+    assert ("nde_personnel", "NRT-II-ZHANG", "valid_to") in cert_fields
+
+
+def test_diff_evaluation_when_no_change_is_stable(tmp_path, monkeypatch):
+    """两版均 release：evaluation 结构稳定，无失效报告与变化。"""
+    main, client = _client(tmp_path, monkeypatch, "stable.db")
+    payload = direct_release_payload().model_dump(mode="json")
+    with client:
+        pid = client.post("/packages", json=payload).json()["package_id"]
+        client.post(f"/packages/{pid}/review", json={"reviewer": "李"})
+        v2 = direct_release_payload().model_dump(mode="json")
+        v2["submitted_by"] = "质检员-王2"  # 制造一处标量差异
+        client.post(f"/packages/{pid}/revisions", json=v2)
+        diff = client.get(
+            f"/packages/{pid}/diff?from_version=1&to_version=2").json()
+    ev = diff["evaluation"]
+    assert ev["old_decision"] == ev["new_decision"] == "release"
+    assert ev["old_invalid_reports"] == []
+    assert ev["new_invalid_reports"] == []
+    assert ev["changed_reports"] == []
+    assert ev["resolved"] == [] and ev["introduced"] == []
+
+
+def test_diff_evaluation_newly_introduced_expiry(tmp_path, monkeypatch):
+    """v1 release、v2 换了提前到期的证书：introduced 带 NR-CERT-EXPIRED。"""
+    main, client = _client(tmp_path, monkeypatch, "regress.db")
+    with client:
+        v1 = direct_release_payload().model_dump(mode="json")
+        pid = client.post("/packages", json=v1).json()["package_id"]
+        client.post(f"/packages/{pid}/review", json={"reviewer": "李"})
+
+        v2 = direct_release_payload().model_dump(mode="json")
+        for c in v2["nde_personnel"]:
+            c["valid_to"] = "2026-03-01T00:00:00Z"
+        client.post(f"/packages/{pid}/revisions", json=v2)
+        diff = client.get(
+            f"/packages/{pid}/diff?from_version=1&to_version=2").json()
+
+    assert diff["old_decision"] == "release"
+    assert diff["new_decision"] == "hold"
+    ev = diff["evaluation"]
+    assert "NR-CERT-EXPIRED" in ev["introduced"]
+    assert ev["old_invalid_reports"] == []
+    assert {s["nde_id"] for s in ev["new_invalid_reports"]} == {"N-001", "N-002"}
+    changed = {c["nde_id"]: c for c in ev["changed_reports"]}
+    assert changed["N-001"]["change"] == "valid_to_invalid"
+
+
+def test_diff_includes_excluded_report_with_period_missing(tmp_path, monkeypatch):
+    """缺起止时刻的报告在续版补齐后，diff 呈现 invalid_to_valid 及原因码。"""
+    main, client = _client(tmp_path, monkeypatch, "period.db")
+    with client:
+        v1 = direct_release_payload().model_dump(mode="json")
+        for n in v1["nde"]:
+            n["started_at"] = None
+            n["finished_at"] = None
+        pid = client.post("/packages", json=v1).json()["package_id"]
+        client.post(f"/packages/{pid}/review", json={"reviewer": "李"})
+
+        v2 = direct_release_payload().model_dump(mode="json")
+        client.post(f"/packages/{pid}/revisions", json=v2)
+        diff = client.get(
+            f"/packages/{pid}/diff?from_version=1&to_version=2").json()
+
+    ev = diff["evaluation"]
+    reasons = {s["nde_id"]: s["reasons"] for s in ev["old_invalid_reports"]}
+    assert "NR-RECORD-PERIOD-MISSING" in reasons["N-001"]
+    assert "NR-RECORD-PERIOD-MISSING" in ev["resolved"]
+    assert ev["new_invalid_reports"] == []

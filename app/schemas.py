@@ -539,6 +539,45 @@ class DiffEntry(BaseModel):
     new: object = None
 
 
+class NdeReportState(BaseModel):
+    """单份检测报告在一个版本下的资源核验状态（供版本差异呈现）。"""
+
+    nde_id: str
+    report_no: Optional[str] = None
+    weld_no: str
+    method: str
+    iteration: int = 0
+    resource_valid: bool
+    period: Optional[dict] = None
+    reasons: list[str] = Field(default_factory=list)
+    examiner_cert_no: Optional[str] = None
+    reviewer_cert_no: Optional[str] = None
+    equipment: list[dict] = Field(default_factory=list)
+
+
+class NdeEvaluation(BaseModel):
+    """两版审查结论中 NDT 资源核验状态的结构化对比。"""
+
+    old_decision: Optional[str] = None
+    new_decision: Optional[str] = None
+    old_codes: list[str] = Field(default_factory=list)
+    new_codes: list[str] = Field(default_factory=list)
+    resolved: list[str] = Field(
+        default_factory=list,
+        description="新版不再触发的条款（含续期消除的 NR-CERT-EXPIRED）",
+    )
+    introduced: list[str] = Field(
+        default_factory=list,
+        description="新版新触发的条款",
+    )
+    old_invalid_reports: list[NdeReportState] = Field(default_factory=list)
+    new_invalid_reports: list[NdeReportState] = Field(default_factory=list)
+    changed_reports: list[dict] = Field(
+        default_factory=list,
+        description="资源核验状态发生变化的报告（含失效详情与所用资源版本）",
+    )
+
+
 class DiffReport(BaseModel):
     package_id: str
     from_version: int
@@ -547,3 +586,4 @@ class DiffReport(BaseModel):
     decision_changed: bool
     old_decision: Optional[str] = None
     new_decision: Optional[str] = None
+    evaluation: Optional[NdeEvaluation] = None

@@ -105,10 +105,16 @@ def _personnel_failures(role: str, cert_no: str | None,
             "reason": f"证书认可产品 {cert.products} 未覆盖焊口产品 {product}",
             "products": list(cert.products), "product": product,
         })
-    if rec.technique and cert.techniques and rec.technique not in cert.techniques:
+    # 技术范围：证书未登记技术范围（空）不得解释为"全部认可"；
+    # 记录未声明实际技术同样无法核对，按技术核验失败剔除。
+    if not cert.techniques or not rec.technique \
+            or rec.technique not in cert.techniques:
         failures.append({
             "code": "NR-CERT-TECHNIQUE", "role": role, "target": cert.cert_no,
-            "reason": f"证书技术范围 {cert.techniques} 不含实际技术 {rec.technique}",
+            "reason": (
+                f"证书技术范围 {list(cert.techniques)} 不含实际技术 "
+                f"{rec.technique!r}（证书技术范围留空或记录未声明技术均不采信）"
+            ),
             "techniques": list(cert.techniques),
             "technique": rec.technique,
         })
@@ -183,11 +189,13 @@ def _accessory_failures(eq: NdeEquipmentVersion, rec: NdeRecord,
                 "period_start": rec.period_start.isoformat(),
                 "period_end": rec.period_end.isoformat(),
             })
-        if rec.technique and acc.techniques and rec.technique not in acc.techniques:
+        if not acc.techniques or not rec.technique \
+                or rec.technique not in acc.techniques:
             failures.append({
                 "code": "NR-EQUIP-ACCESSORY", "role": "accessory",
                 "target": target,
-                "reason": f"附件 {target} 不支持检测技术 {rec.technique}",
+                "reason": f"附件 {target} 不支持实际检测技术 "
+                          f"{rec.technique!r}（或附件技术能力未登记）",
                 "techniques": list(acc.techniques),
                 "technique": rec.technique,
             })
@@ -263,35 +271,73 @@ def _equipment_failures(rec: NdeRecord, equip_index) -> list[dict]:
                 "period_end": rec.period_end.isoformat(),
             })
         if is_main:
-            if rec.technique and eq.techniques and rec.technique not in eq.techniques:
+            # 技术能力：设备未登记技术能力（空）不解释为全部支持
+            if not eq.techniques or not rec.technique \
+                    or rec.technique not in eq.techniques:
                 failures.append({
-                    "code": "NR-EQUIP-TECHNIQUE", "role": use.role, "target": target,
-                    "reason": f"设备技术能力 {eq.techniques} 不支持 {rec.technique}",
+                    "code": "NR-EQUIP-TECHNIQUE", "role": use.role,
+                    "target": target,
+                    "reason": f"设备技术能力 {list(eq.techniques)} 不支持实际技术 "
+                              f"{rec.technique!r}（设备能力留空或记录未声明技术）",
                     "techniques": list(eq.techniques),
                     "technique": rec.technique,
                 })
-            # 量程 / 能量参数核对（实际参数登记时才核对，未登记无法核对）
-            if rec.applied_thickness_mm is not None:
+            # 能力规格必填：射线源必须登记能量范围；UT 主机必须登记量程。
+            # 规格缺失即无法核对匹配，不得以"记录不填实际参数"绕过。
+            if eq.kind in ("xray_source", "gamma_source"):
+                if eq.energy_min_kev is None or eq.energy_max_kev is None:
+                    failures.append({
+                        "code": "NR-EQUIP-SPEC-MISSING", "role": use.role,
+                        "target": target,
+                        "reason": f"射线源 {target} 未登记能量范围",
+                        "energy_min_kev": eq.energy_min_kev,
+                        "energy_max_kev": eq.energy_max_kev,
+                    })
+                if rec.exposure_energy_kev is None:
+                    failures.append({
+                        "code": "NR-RECORD-PARAMETER-MISSING", "role": use.role,
+                        "target": target,
+                        "reason": "RT 检测记录未登记实际曝光能量 exposure_energy_kev",
+                    })
+            if eq.kind == "ut_flaw_detector":
+                if eq.range_min_mm is None or eq.range_max_mm is None:
+                    failures.append({
+                        "code": "NR-EQUIP-SPEC-MISSING", "role": use.role,
+                        "target": target,
+                        "reason": f"UT 探伤仪 {target} 未登记量程范围",
+                        "range_min_mm": eq.range_min_mm,
+                        "range_max_mm": eq.range_max_mm,
+                    })
+                if rec.applied_thickness_mm is None:
+                    failures.append({
+                        "code": "NR-RECORD-PARAMETER-MISSING", "role": use.role,
+                        "target": target,
+                        "reason": "UT 检测记录未登记实际声程/壁厚 "
+                                  "applied_thickness_mm",
+                    })
+            # 实际参数落入能力范围（仅在双方均有值时比对，缺失已在上面挂条款）
+            if rec.applied_thickness_mm is not None \
+                    and eq.range_min_mm is not None and eq.range_max_mm is not None:
                 t = rec.applied_thickness_mm
                 lo, hi = eq.range_min_mm, eq.range_max_mm
-                if hi is None or lo is None or not (lo <= t <= hi):
+                if not (lo <= t <= hi):
                     failures.append({
                         "code": "NR-EQUIP-PARAMETER", "role": use.role,
                         "target": target,
-                        "reason": f"实际声程/壁厚 {t}mm 超出设备量程 "
-                                  f"[{lo}, {hi}]mm（或设备未登记量程）",
+                        "reason": f"实际声程/壁厚 {t}mm 超出设备量程 [{lo}, {hi}]mm",
                         "applied_thickness_mm": t,
                         "range_min_mm": lo, "range_max_mm": hi,
                     })
-            if rec.exposure_energy_kev is not None:
+            if rec.exposure_energy_kev is not None \
+                    and eq.energy_min_kev is not None and eq.energy_max_kev is not None:
                 e = rec.exposure_energy_kev
                 lo, hi = eq.energy_min_kev, eq.energy_max_kev
-                if hi is None or lo is None or not (lo <= e <= hi):
+                if not (lo <= e <= hi):
                     failures.append({
                         "code": "NR-EQUIP-PARAMETER", "role": use.role,
                         "target": target,
                         "reason": f"实际射线能量 {e}keV 超出设备/源能量范围 "
-                                  f"[{lo}, {hi}]keV（或设备未登记能量范围）",
+                                  f"[{lo}, {hi}]keV",
                         "exposure_energy_kev": e,
                         "energy_min_kev": lo, "energy_max_kev": hi,
                     })
@@ -302,10 +348,12 @@ def _equipment_failures(rec: NdeRecord, equip_index) -> list[dict]:
                 extra_uses=extra))
         else:
             # 检测记录直接挂的附件（不随主设备版本）：技术能力一致性
-            if rec.technique and eq.techniques and rec.technique not in eq.techniques:
+            if not eq.techniques or not rec.technique \
+                    or rec.technique not in eq.techniques:
                 failures.append({
                     "code": "NR-EQUIP-ACCESSORY", "role": use.role, "target": target,
-                    "reason": f"附件 {target} 不支持检测技术 {rec.technique}",
+                    "reason": f"附件 {target} 不支持实际检测技术 "
+                              f"{rec.technique!r}（或附件技术能力未登记）",
                 })
     return failures
 
@@ -327,6 +375,22 @@ def verify_nde_resource(rec: NdeRecord, *, product: str,
       }
     """
     failures: list[dict] = []
+
+    # 实施起止时刻必须显式登记：缺任一项即无法证明整个实施时段持续有效，
+    # 不得以 examined_at 倒推替代（时段口径用于夜班跨到期点判定）。
+    missing_period = []
+    if rec.started_at is None:
+        missing_period.append("started_at")
+    if rec.finished_at is None:
+        missing_period.append("finished_at")
+    if missing_period:
+        failures.append({
+            "code": "NR-RECORD-PERIOD-MISSING", "role": "record",
+            "target": rec.nde_id,
+            "reason": "检测记录缺少实施时段字段: "
+                      + "、".join(missing_period),
+            "missing": missing_period,
+        })
 
     examiner_cert = cert_index.get(rec.examiner_cert_no) \
         if rec.examiner_cert_no else None
