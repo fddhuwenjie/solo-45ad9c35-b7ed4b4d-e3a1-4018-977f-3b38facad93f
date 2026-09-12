@@ -253,15 +253,16 @@ def _temperature_checks(
             lead_minutes = w0.preheat_lead_minutes
     lead = timedelta(minutes=lead_minutes)
 
-    # 仪表版本：登记 + 校准时点覆盖；归属道次确定后调用，使条款
-    # 同时定位到原始测点（measure_id）与道次（pass_id）
+    # 仪表版本：登记 + 类别匹配（测温须用 thermometer）+ 校准时点覆盖；
+    # 归属道次确定后调用，使条款同时定位到原始测点与道次
     def gauge_ok(m: TemperatureMeasurement, target_pass_no: int | None) -> bool:
+        pid = next((p.pass_id for p in ordered
+                    if p.pass_no == target_pass_no), None)
         g = gauge_index.get((m.gauge_id, m.gauge_version))
         if g is None:
             findings.append(_f(
                 "WP-GAUGE-MISSING", weld_no=weld_no, repair_id=repair_id,
-                pass_id=(next((p.pass_id for p in ordered
-                               if p.pass_no == target_pass_no), None)),
+                pass_id=pid,
                 measure_id=m.measure_id, scope=scope,
                 evidence={"target": f"{m.gauge_id}@{m.gauge_version}",
                           "reason": "测温记录引用的仪表版本未登记",
@@ -274,19 +275,29 @@ def _temperature_checks(
                 "weld_no": weld_no, "repair_id": repair_id,
                 "measure_id": m.measure_id})
             return False
+        ok = True
+        if g.kind != "thermometer":
+            findings.append(_f(
+                "WP-GAUGE-KIND", weld_no=weld_no, repair_id=repair_id,
+                pass_id=pid, measure_id=m.measure_id, scope=scope,
+                evidence={"target": f"{m.gauge_id}@{m.gauge_version}",
+                          "pass_no": target_pass_no,
+                          "gauge_kind": g.kind,
+                          "required_kind": "thermometer",
+                          "reason": "测温记录引用的仪表类别不是测温仪"
+                                    "（用途与类别不匹配）"}))
+            ok = False
         if not (g.calibrated_from <= m.measured_at <= g.calibrated_to):
             findings.append(_f(
                 "WP-GAUGE-CALIBRATION", weld_no=weld_no, repair_id=repair_id,
-                pass_id=(next((p.pass_id for p in ordered
-                               if p.pass_no == target_pass_no), None)),
-                measure_id=m.measure_id, scope=scope,
+                pass_id=pid, measure_id=m.measure_id, scope=scope,
                 evidence={"target": f"{m.gauge_id}@{m.gauge_version}",
                           "pass_no": target_pass_no,
                           "calibrated_from": _iso(g.calibrated_from),
                           "calibrated_to": _iso(g.calibrated_to),
                           "used_at": _iso(m.measured_at)}))
-            return False
-        return True
+            ok = False
+        return ok
 
     assigned: dict[int, list[TemperatureMeasurement]] = defaultdict(list)
     views: list[dict] = []
@@ -375,12 +386,17 @@ def _temperature_checks(
         if not pts:
             w_here = windows_by_process.get(p.process.strip().upper())
             if p.pass_no == 1:
-                if w_here is not None and w_here.preheat_min_c > 0:
-                    findings.append(_f(
-                        "WP-PREHEAT-MISSING", weld_no=weld_no,
-                        repair_id=repair_id, pass_id=p.pass_id, scope=scope,
-                        evidence={"pass_no": 1,
-                                  "preheat_min_c": w_here.preheat_min_c}))
+                # 首道始终要求可追溯的预热测点：即使 WPS 预热下限为 0
+                # （不强制预热），也不得省略温度记录
+                findings.append(_f(
+                    "WP-PREHEAT-MISSING", weld_no=weld_no,
+                    repair_id=repair_id, pass_id=p.pass_id, scope=scope,
+                    evidence={
+                        "pass_no": 1,
+                        "preheat_min_c": (w_here.preheat_min_c
+                                          if w_here is not None else None),
+                        "reason": "首道起弧前无预热测温记录（预热下限为 0 "
+                                  "也须有可追溯测点）"}))
             else:
                 findings.append(_f(
                     "WP-INTERPASS-MISSING", weld_no=weld_no,
@@ -405,6 +421,13 @@ def _temperature_checks(
                     pass_id=p.pass_id, measure_id=gov.measure_id, scope=scope,
                     evidence={"pass_no": 1, "actual_c": gov.temp_c,
                               "min_c": window.preheat_min_c}))
+            if window.preheat_max_c is not None \
+                    and gov.temp_c > window.preheat_max_c:
+                findings.append(_f(
+                    "WP-PREHEAT-HIGH", weld_no=weld_no, repair_id=repair_id,
+                    pass_id=p.pass_id, measure_id=gov.measure_id, scope=scope,
+                    evidence={"pass_no": 1, "actual_c": gov.temp_c,
+                              "max_c": window.preheat_max_c}))
         else:
             lo, hi = window.interpass_min_c, window.interpass_max_c
             if (lo is not None and gov.temp_c < lo) or gov.temp_c > hi:
@@ -420,6 +443,25 @@ def _temperature_checks(
 # ============================================================ 范围（焊口/返修）核验
 
 
+# 仪表类别 -> 可证明的测量用途。weld_monitor 为电流/电压/焊速一体监测仪；
+# thermometer 只证明温度，不能单独证明任何电气参数或焊速。
+_GAUGE_KIND_PURPOSES: dict[str, set[str]] = {
+    "ammeter": {"current"},
+    "voltmeter": {"voltage"},
+    "timer": {"travel"},
+    "weld_monitor": {"current", "voltage", "travel"},
+    "thermometer": {"temperature"},
+    "other": set(),
+}
+# 道次参数核对所需用途（电流/电压/焊速）：每一项都必须有类别匹配且
+# 校准有效期覆盖整个道次时段的仪表证明。
+_PASS_PARAM_PURPOSES = ("current", "voltage", "travel")
+
+
+def _gauge_purposes(g: WeldGaugeVersion) -> set[str]:
+    return set(_GAUGE_KIND_PURPOSES.get(g.kind, set()))
+
+
 def _gauge_checks_passes(
     passes: list[PassRecord],
     *,
@@ -427,7 +469,12 @@ def _gauge_checks_passes(
     gauge_index: dict[tuple[str, str], WeldGaugeVersion],
     structural_gaps: list[dict],
 ) -> list[dict]:
-    """道次仪表版本：引用存在且校准持续覆盖整个道次时段。"""
+    """道次仪表版本：引用存在、类别与测量用途匹配、校准覆盖整个道次时段。
+
+    thermometer 只能证明温度；电流/电压/焊速分别须由 ammeter/voltmeter/timer
+    （或 weld_monitor 一体仪）证明。缺少类别匹配且校准有效的参数仪表时
+    判 WP-GAUGE-KIND（规则性 hold，记录齐全可冻结纠错）。
+    """
     findings: list[dict] = []
     for p in passes:
         ref = dict(weld_no=weld_no, repair_id=repair_id,
@@ -441,7 +488,14 @@ def _gauge_checks_passes(
                 "detail": f"道次 {p.pass_id} 未引用测量仪表版本",
                 "weld_no": weld_no, "repair_id": repair_id,
                 "pass_id": p.pass_id})
+            # 无任何仪表引用时三类参数均无证明
+            findings.append(_f("WP-GAUGE-KIND", **ref, evidence={
+                "pass_no": p.pass_no,
+                "missing_purposes": list(_PASS_PARAM_PURPOSES),
+                "reason": "道次未引用可证明电流/电压/焊速的类别匹配仪表"}))
             continue
+
+        resolved: dict[tuple[str, str], WeldGaugeVersion] = {}
         seen = set()
         for use in p.gauges:
             key = (use.gauge_id, use.version)
@@ -460,14 +514,39 @@ def _gauge_checks_passes(
                     "weld_no": weld_no, "repair_id": repair_id,
                     "pass_id": p.pass_id})
                 continue
+            resolved[key] = g
+            # 测温仪表挂在道次上属于用途错配（测温应由 temperature_measurements
+            # 链登记）；此处只记录类别，参数用途覆盖在下面统一判定
             if not (g.calibrated_from <= p.started_at
                     and p.finished_at <= g.calibrated_to):
                 findings.append(_f("WP-GAUGE-CALIBRATION", **ref, evidence={
                     "pass_no": p.pass_no, "target": target,
+                    "gauge_kind": g.kind,
                     "calibrated_from": _iso(g.calibrated_from),
                     "calibrated_to": _iso(g.calibrated_to),
                     "used_from": _iso(p.started_at),
                     "used_to": _iso(p.finished_at)}))
+
+        # 用途-类别绑定：逐参数核对证明仪表。
+        # - 完全没有对应用途类别的仪表 -> WP-GAUGE-KIND（如只用 thermometer）；
+        # - 类别正确但全部校准失效 -> 已由 WP-GAUGE-CALIBRATION 挂条款，不重复。
+        missing_purposes: list[str] = []
+        for purpose in _PASS_PARAM_PURPOSES:
+            matching = [g for g in resolved.values()
+                        if purpose in _gauge_purposes(g)]
+            if not matching:
+                missing_purposes.append(purpose)
+        if missing_purposes:
+            referenced = [
+                {"target": f"{g.gauge_id}@{g.version}", "kind": g.kind}
+                for g in resolved.values()
+            ]
+            findings.append(_f("WP-GAUGE-KIND", **ref, evidence={
+                "pass_no": p.pass_no,
+                "missing_purposes": missing_purposes,
+                "referenced_gauges": referenced,
+                "reason": "缺少与电流/电压/焊速用途类别匹配的仪表"
+                          "（thermometer 不能单独证明电气参数或焊速）"}))
     return findings
 
 
@@ -646,6 +725,7 @@ def verify_scope(
                 "heat_input_kj_mm": [window.heat_input_min_kj_mm,
                                      window.heat_input_max_kj_mm],
                 "preheat_min_c": window.preheat_min_c,
+                "preheat_max_c": window.preheat_max_c,
                 "interpass_c": [window.interpass_min_c,
                                 window.interpass_max_c],
                 "thermal_efficiency": window.thermal_efficiency,

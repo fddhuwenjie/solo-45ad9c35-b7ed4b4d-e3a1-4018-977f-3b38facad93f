@@ -462,6 +462,11 @@ class WpsProcessWindow(UtcModel):
     preheat_min_c: float = Field(
         default=0.0, ge=0, description="首道起弧前预热温度下限(℃)"
     )
+    preheat_max_c: Optional[float] = Field(
+        default=None, gt=0,
+        description="首道起弧前预热温度上限(℃)；不限制可留空。注意：下限为 0 "
+                    "仅表示不强制预热，首道仍须有可追溯的起弧前温度测点",
+    )
     preheat_lead_minutes: float = Field(
         default=60.0, gt=0,
         description="预热测温须在首道起弧前多长时间内完成（默认 60 分钟）",
@@ -490,6 +495,9 @@ class WpsProcessWindow(UtcModel):
         if self.interpass_min_c is not None \
                 and self.interpass_min_c > self.interpass_max_c:
             raise ValueError("interpass_min_c 不得大于 interpass_max_c")
+        if self.preheat_max_c is not None \
+                and self.preheat_max_c < self.preheat_min_c:
+            raise ValueError("preheat_max_c 不得小于 preheat_min_c")
         return self
 
 

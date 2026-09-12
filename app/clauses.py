@@ -586,15 +586,24 @@ CLAUSES: dict[str, dict[str, str]] = {
     "WP-PREHEAT-MISSING": {
         "severity": Severity.HOLD.value,
         "category": ClauseCategory.WELD_EXECUTION.value,
-        "reference": "GB 50236：要求预热时，首道（根焊）起弧前应有预热温度"
-                     "测温记录",
-        "message": "首道起弧前缺少预热温度测温记录（采样缺失）",
+        "reference": "GB 50236：首道（根焊）起弧前应测温并记录预热温度；"
+                     "即使 WPS 预热下限为 0（不强制预热），仍须有可追溯的"
+                     "起弧前温度测点证明",
+        "message": "首道起弧前缺少预热温度测温记录（采样缺失；预热下限为 0 "
+                   "也不得省略）",
     },
     "WP-PREHEAT-LOW": {
         "severity": Severity.HOLD.value,
         "category": ClauseCategory.WELD_EXECUTION.value,
         "reference": "GB 50236：预热温度不得低于 WPS 规定下限",
         "message": "首道起弧前预热温度低于 WPS 规定下限",
+    },
+    "WP-PREHEAT-HIGH": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "GB 50236：预热温度不得高于 WPS 规定上限（过热同样改变"
+                     "焊接热循环）",
+        "message": "首道起弧前预热温度高于 WPS 规定上限",
     },
     "WP-INTERPASS-MISSING": {
         "severity": Severity.HOLD.value,
@@ -623,6 +632,15 @@ CLAUSES: dict[str, dict[str, str]] = {
         "reference": "计量体系：电流表/电压表/测温仪表应在校准有效期内使用；"
                      "跨到期点的施焊时段不得整体采信",
         "message": "仪表校准有效期未持续覆盖道次施焊/测温时点（校准失效）",
+    },
+    "WP-GAUGE-KIND": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.WELD_EXECUTION.value,
+        "reference": "计量体系：测量仪表类别应与测量用途匹配——测温仪只能"
+                     "证明温度，电流/电压/焊速须由对应类别（电流表/电压表/"
+                     "计时器或焊接参数监测仪）且校准有效的仪表证明",
+        "message": "道次缺少与测量用途类别匹配且校准有效的参数仪表"
+                   "（thermometer 不能单独证明电流、电压或焊速）",
     },
     "WP-MEASURE-LAG": {
         "severity": Severity.HOLD.value,

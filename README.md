@@ -252,12 +252,18 @@ curl -s "localhost:8000/packages/$PID/welds/W-001/svg?version=1" -o w001.svg
   电压、焊速、热输入逐项核对方法窗口，越限即 hold 并给出实测值与窗口；
 - **焊工资格**：每道实际焊工必须与焊口/返修登记焊工一致，并按该道起弧时点
   匹配焊工资格（方法/位置/组别/厚度/管径/有效期）；
-- **预热/层间温度**：首道起弧前须有 `preheat` 测温且不低于窗口下限；其余
-  每道起弧前须有 `interpass` 测温且落在层间窗口；测温时点必须位于上一道
-  收弧之后、本道起弧之前（事后补测判 `WP-MEASURE-LAG` 且不计入采样）；
-  `pass_no` 缺省时由引擎按测温时点重建归属；
-- **仪表版本**：道次监测仪表与测温仪表都必须登记并在校准有效期内，按
-  整个道次时段（测温按测温时点）核对；跨到期点即 `WP-GAUGE-CALIBRATION`；
+- **预热/层间温度**：WPS 窗口同时冻结 `preheat_min_c`/`preheat_max_c` 与
+  层间温度窗口；**首道始终要求可追溯的预热测点——即使 `preheat_min_c=0`
+  （不强制预热），缺样也判 `WP-PREHEAT-MISSING`**，预热超下限/超上限分别判
+  `WP-PREHEAT-LOW`/`WP-PREHEAT-HIGH`；其余每道起弧前须有 `interpass` 测温
+  且落在层间窗口；测温时点必须位于上一道收弧之后、本道起弧之前（事后补测判
+  `WP-MEASURE-LAG` 且不计入采样）；`pass_no` 缺省时由引擎按测温时点重建归属；
+- **仪表版本与用途绑定**：道次参数仪表与测温仪表都必须登记并在校准有效期内，
+  按整个道次时段（测温按测温时点）核对，跨到期点即 `WP-GAUGE-CALIBRATION`；
+  仪表类别还必须与测量用途匹配——`thermometer` 只能证明温度，电流、电压、
+  焊速须分别由 `ammeter`/`voltmeter`/`timer`（或一体的 `weld_monitor`）证明，
+  测温记录引用的仪表也必须是 `thermometer`；缺少类别匹配的仪表判
+  `WP-GAUGE-KIND`（类别正确但校准失效的只挂 `WP-GAUGE-CALIBRATION`）；
 - **返修闭合**：返修补焊道次链任一不通过即 `WP-REPAIR-PASS-INVALID`
   （随附具体 WP 码），该次返修不得闭合——即使返修后复检 RT 合格，
   `RP-*` 返修链仍保持开口、整口 hold，最终合格报告无法掩盖参数混用；

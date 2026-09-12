@@ -239,6 +239,72 @@ def test_preheat_low(baseline):
     assert "WP-PREHEAT-LOW" in _codes(r, "W-002")
 
 
+def _baseline_with_windows(**window_kw):
+    """用自定义 GTAW/SMAW 窗口参数重建合规道次链基线。"""
+    p = extension_payload().model_copy(deep=True)
+    p.wps[0].process_windows = [
+        wps_process_window("GTAW", **window_kw),
+        wps_process_window("SMAW", **window_kw)]
+    gauges, passes, measures = weld_pass_chain(p.welds, p.repairs)
+    p.weld_gauges, p.weld_passes, p.temperature_measurements = (
+        gauges, passes, measures)
+    return p
+
+
+def test_preheat_sample_required_even_when_min_zero():
+    """预热下限为 0（不强制预热）时，首道仍必须有可追溯预热测点。"""
+    p = _baseline_with_windows(preheat_min_c=0.0)
+    # 基线含首道预热测点：放行
+    r = evaluate(p)
+    assert _weld(r, "W-002")["decision"] == "release"
+    # 删除全部首道预热测点：每口首道均判 WP-PREHEAT-MISSING 并 hold
+    p.temperature_measurements = [
+        m for m in p.temperature_measurements if m.kind != "preheat"]
+    r = evaluate(p)
+    assert _weld(r, "W-002")["decision"] == "hold"
+    codes = _codes(r, "W-002")
+    assert "WP-PREHEAT-MISSING" in codes
+    f = next(f for f in _weld(r, "W-002")["findings"]
+             if f["code"] == "WP-PREHEAT-MISSING")
+    # 定位到缺失项：首道道次编号；测点缺样时 measure_id 为空
+    assert f["pass_id"]
+    assert f["evidence"]["preheat_min_c"] == 0.0
+
+
+def test_preheat_high(baseline):
+    """预热温度超 WPS 上限：WP-PREHEAT-HIGH，定位测点与道次。"""
+    # 基线窗口未设预热上限，先冻结 preheat_max_c=150
+    for win in baseline.wps[0].process_windows:
+        win.preheat_max_c = 150.0
+    m = next(m for m in baseline.temperature_measurements
+             if m.weld_no == "W-002" and m.kind == "preheat")
+    m.temp_c = 180.0
+    r = evaluate(_revalidate(baseline))
+    codes = _codes(r, "W-002")
+    assert "WP-PREHEAT-HIGH" in codes
+    f = next(f for f in _weld(r, "W-002")["findings"]
+             if f["code"] == "WP-PREHEAT-HIGH")
+    assert f["measure_id"] == m.measure_id and f["pass_id"]
+    assert f["evidence"] == {"pass_no": 1, "actual_c": 180.0, "max_c": 150.0}
+
+
+def test_preheat_within_max_keeps_release():
+    p = _baseline_with_windows(preheat_max_c=150.0)  # 默认预热 120
+    r = evaluate(p)
+    assert r["decision"] == "release"
+    assert "WP-PREHEAT-HIGH" not in _codes(r)
+
+
+def test_preheat_max_below_min_rejected():
+    from app.schemas import WpsProcessWindow
+    with pytest.raises(Exception):
+        WpsProcessWindow(
+            process="SMAW", polarity=["DCEP"],
+            current_min_a=100, current_max_a=160,
+            voltage_min_v=20, voltage_max_v=26,
+            interpass_max_c=200, preheat_min_c=120, preheat_max_c=80)
+
+
 def test_interpass_measurement_missing(baseline):
     baseline.temperature_measurements = [
         m for m in baseline.temperature_measurements
@@ -290,6 +356,106 @@ def test_monitor_gauge_calibration_expired(baseline):
     r = evaluate(baseline)
     # 3/5 返修（及 3/5 之后焊口）的道次跨校准到期点
     assert "WP-GAUGE-CALIBRATION" in _codes(r, "W-001")
+    # 类别仍匹配（weld_monitor），不重复发 WP-GAUGE-KIND
+    assert "WP-GAUGE-KIND" not in _codes(r, "W-001")
+
+
+def _point_passes_at_gauge(payload, weld_no, gauge_id, version):
+    from app.schemas import GaugeUse
+    for p in payload.weld_passes:
+        if p.weld_no == weld_no and p.scope == "production":
+            p.gauges = [GaugeUse(gauge_id=gauge_id, version=version,
+                                 role="main")]
+
+
+def test_thermometer_cannot_prove_electrical_params(baseline):
+    """道次只挂测温仪 TM-1：类别不匹配，电流/电压/焊速无证明 -> hold。"""
+    _point_passes_at_gauge(baseline, "W-002", "TM-1", "2026A")
+    r = evaluate(_revalidate(baseline))
+    codes = _codes(r, "W-002")
+    assert "WP-GAUGE-KIND" in codes
+    assert _weld(r, "W-002")["decision"] == "hold"
+    # 每道都缺三类参数证明，且定位到具体道次
+    kind_findings = [f for f in _weld(r, "W-002")["findings"]
+                     if f["code"] == "WP-GAUGE-KIND"]
+    assert {f["pass_id"] for f in kind_findings} == {
+        p.pass_id for p in baseline.weld_passes
+        if p.weld_no == "W-002" and p.scope == "production"}
+    ev = kind_findings[0]["evidence"]
+    assert set(ev["missing_purposes"]) == {"current", "voltage", "travel"}
+    assert ev["referenced_gauges"][0]["kind"] == "thermometer"
+    # 规则性 hold（记录齐全）：可冻结，不属于结构缺口
+    assert r["weld_execution"]["freeze_blocked"] is False
+
+
+def test_split_param_gauges_all_valid_release(baseline):
+    """电流表/电压表/计时器分列且各自校准有效：类别匹配，正常放行。"""
+    from app.schemas import GaugeUse, WeldGaugeVersion
+    gauges = list(baseline.weld_gauges) + [
+        WeldGaugeVersion(gauge_id="AM-1", version="2026A", name="电流表",
+                         kind="ammeter", serial_no="SN-AM-1",
+                         calibrated_from="2026-01-01T00:00:00Z",
+                         calibrated_to="2026-12-31T23:59:59Z"),
+        WeldGaugeVersion(gauge_id="VM-1", version="2026A", name="电压表",
+                         kind="voltmeter", serial_no="SN-VM-1",
+                         calibrated_from="2026-01-01T00:00:00Z",
+                         calibrated_to="2026-12-31T23:59:59Z"),
+        WeldGaugeVersion(gauge_id="TMER-1", version="2026A", name="计时器",
+                         kind="timer", serial_no="SN-TMER-1",
+                         calibrated_from="2026-01-01T00:00:00Z",
+                         calibrated_to="2026-12-31T23:59:59Z"),
+    ]
+    baseline.weld_gauges = gauges
+    for p in baseline.weld_passes:
+        if p.weld_no == "W-002" and p.scope == "production":
+            p.gauges = [
+                GaugeUse(gauge_id="AM-1", version="2026A", role="ammeter"),
+                GaugeUse(gauge_id="VM-1", version="2026A", role="voltmeter"),
+                GaugeUse(gauge_id="TMER-1", version="2026A", role="timer"),
+            ]
+    r = evaluate(_revalidate(baseline))
+    assert "WP-GAUGE-KIND" not in _codes(r, "W-002")
+    assert _weld(r, "W-002")["decision"] == "release"
+
+
+def test_split_param_gauges_one_kind_missing(baseline):
+    """只挂电流表+电压表、无计时器：焊速无类别匹配 -> WP-GAUGE-KIND。"""
+    from app.schemas import GaugeUse, WeldGaugeVersion
+    baseline.weld_gauges += [
+        WeldGaugeVersion(gauge_id="AM-1", version="2026A", name="电流表",
+                         kind="ammeter", serial_no="SN-AM-1",
+                         calibrated_from="2026-01-01T00:00:00Z",
+                         calibrated_to="2026-12-31T23:59:59Z"),
+        WeldGaugeVersion(gauge_id="VM-1", version="2026A", name="电压表",
+                         kind="voltmeter", serial_no="SN-VM-1",
+                         calibrated_from="2026-01-01T00:00:00Z",
+                         calibrated_to="2026-12-31T23:59:59Z"),
+    ]
+    for p in baseline.weld_passes:
+        if p.weld_no == "W-002" and p.scope == "production":
+            p.gauges = [
+                GaugeUse(gauge_id="AM-1", version="2026A", role="ammeter"),
+                GaugeUse(gauge_id="VM-1", version="2026A", role="voltmeter"),
+            ]
+    r = evaluate(_revalidate(baseline))
+    findings = [f for f in _weld(r, "W-002")["findings"]
+                if f["code"] == "WP-GAUGE-KIND"]
+    assert findings
+    assert all(f["evidence"]["missing_purposes"] == ["travel"]
+               for f in findings)
+
+
+def test_temperature_measurement_with_non_thermometer_gauge(baseline):
+    """测温记录挂焊接监测仪（非 thermometer）：用途类别不匹配 -> hold。"""
+    for m in baseline.temperature_measurements:
+        if m.weld_no == "W-002":
+            m.gauge_id, m.gauge_version = "WM-1", "2026A"
+    r = evaluate(_revalidate(baseline))
+    codes = _codes(r, "W-002")
+    assert "WP-GAUGE-KIND" in codes
+    f = next(f for f in _weld(r, "W-002")["findings"]
+             if f["code"] == "WP-GAUGE-KIND" and f.get("measure_id"))
+    assert f["evidence"]["required_kind"] == "thermometer"
 
 
 def test_no_passes_submitted_blocks_freeze(baseline):
@@ -417,6 +583,60 @@ def test_preview_shape_contains_weld_execution(client, baseline):
     assert {
         "WP-PASS-DUP", "WP-PASS-OVERLAP", "WP-LAYER-GAP",
         "WP-CURRENT-OUTSIDE", "WP-HEATINPUT-OUTSIDE",
-        "WP-INTERPASS-HIGH", "WP-GAUGE-CALIBRATION",
+        "WP-PREHEAT-MISSING", "WP-PREHEAT-HIGH",
+        "WP-INTERPASS-HIGH", "WP-GAUGE-CALIBRATION", "WP-GAUGE-KIND",
         "WP-REPAIR-PASS-INVALID",
     } <= codes
+
+
+def test_gauge_kind_rule_hold_full_lifecycle(client, baseline):
+    """thermometer-only 属记录齐全的规则性 hold：可冻结/修订/签发。"""
+    bad = baseline.model_copy(deep=True)
+    _point_passes_at_gauge(bad, "W-002", "TM-1", "2026A")
+    bad = _revalidate(bad)
+    pid = client.post("/packages", json=_json(bad)).json()["package_id"]
+    # 可冻结（非结构缺口），但不可签发
+    rr = client.post(f"/packages/{pid}/review",
+                     json={"reviewer": "责任工程师-李"})
+    assert rr.status_code == 200 and rr.json()["status"] == "frozen"
+    assert client.post(f"/packages/{pid}/issue",
+                       json={"issuer": "赵"}).status_code == 409
+    # 从冻结旧版派生修订：换回类别匹配的监测仪 -> release，可签发
+    rv = client.post(f"/packages/{pid}/revisions", json=_json(baseline))
+    assert rv.json()["version"] == 2 and rv.json()["decision"] == "release"
+    client.post(f"/packages/{pid}/review", json={"reviewer": "李"})
+    assert client.post(f"/packages/{pid}/issue",
+                       json={"issuer": "赵"}).status_code == 200
+    diff = client.get(f"/packages/{pid}/diff?from_version=1&to_version=2").json()
+    ev = diff["weld_pass_evaluation"]
+    assert "WP-GAUGE-KIND" in ev["resolved"]
+    keys = {c["scope_key"]: c["change"] for c in ev["changed_scopes"]}
+    assert keys.get("production:W-002") == "invalid_to_valid"
+    # 旧版仍冻结保留 WP-GAUGE-KIND
+    v1 = client.get(f"/packages/{pid}?version=1").json()
+    assert "WP-GAUGE-KIND" in v1["clauses_triggered"]
+
+
+def test_preheat_max_frozen_and_revised(client):
+    """preheat_max_c 随窗口冻结；超上限 hold，修订降温后放行，diff 呈现翻转。"""
+    hot = _baseline_with_windows(preheat_max_c=150.0)
+    m = next(m for m in hot.temperature_measurements
+             if m.weld_no == "W-002" and m.kind == "preheat")
+    m.temp_c = 180.0
+    pid = client.post("/packages", json=_json(hot)).json()["package_id"]
+    client.post(f"/packages/{pid}/review", json={"reviewer": "李"})
+    v1 = client.get(f"/packages/{pid}?version=1").json()
+    assert "WP-PREHEAT-HIGH" in v1["clauses_triggered"]
+    win = v1["weld_execution"]["wps_windows"][0]["process_windows"][0]
+    assert win["preheat_max_c"] == 150.0
+
+    fixed = _baseline_with_windows(preheat_max_c=150.0)  # 默认预热 120
+    rv = client.post(f"/packages/{pid}/revisions",
+                     json=_json(fixed)).json()
+    assert rv["decision"] == "release"
+    diff = client.get(f"/packages/{pid}/diff?from_version=1&to_version=2").json()
+    ev = diff["weld_pass_evaluation"]
+    assert "WP-PREHEAT-HIGH" in ev["resolved"]
+    assert any(ch["section"] == "temperature_measurements"
+               for ch in diff["changes"])
+
