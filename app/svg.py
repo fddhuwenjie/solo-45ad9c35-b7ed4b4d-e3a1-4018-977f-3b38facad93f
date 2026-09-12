@@ -58,8 +58,13 @@ def _sector(r_in: float, r_out: float, a1: float, a2: float) -> str:
 def _band_path(r_in: float, r_out: float, band: dict) -> list[str]:
     if band.get("full_circle"):
         return [_sector(r_in, r_out, 0.0, 360.0)]
+    start = geo.norm(band["start_deg"])
+    end = geo.norm(band["end_deg"])
+    if start == end:
+        # 归一化后零长度（如 0~360 的全周片经序列化）按整圈绘制
+        return [_sector(r_in, r_out, 0.0, 360.0)]
     obj = geo.AngleBand(
-        start_deg=band["start_deg"], end_deg=band["end_deg"], full_circle=False
+        start_deg=start, end_deg=end, full_circle=False
     )
     return [_sector(r_in, r_out, s, e) for s, e in geo.band_to_arcs(obj)]
 

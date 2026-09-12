@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
@@ -28,26 +29,31 @@ from .svg import render_weld_svg
 
 DB_PATH = os.environ.get("WELD_DB_PATH", os.path.join(os.getcwd(), "data", "weld_release.db"))
 
+store: Store | None = None
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global store
+    if store is None:
+        store = Store(DB_PATH)
+    yield
+
+
 app = FastAPI(
     title="承压管道焊口合规放行 API",
     version="1.0.0",
+    lifespan=lifespan,
     description=(
         "按施焊时点匹配 WPS/PQR 与焊工资格，核算检验批抽检/扩检覆盖率，"
         "并沿缺陷周向位置串接返修、复检与扩检；不合格焊口保持 hold 并列条款。"
     ),
 )
-store: Store | None = None
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    global store
-    if store is None:
-        store = Store(DB_PATH)
 
 
 def _store() -> Store:
-    if store is None:  # 测试中未触发 startup 时兜底
+    global store
+    if store is None:  # 未触发 lifespan（如直接导入调用）时兜底
         store = Store(DB_PATH)
     return store
 

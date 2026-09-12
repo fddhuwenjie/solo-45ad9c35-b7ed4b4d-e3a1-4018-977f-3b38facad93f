@@ -1,0 +1,4 @@
+-r requirements.txt
+# 开发与测试附加依赖
+httpx>=0.27
+pytest>=8.0

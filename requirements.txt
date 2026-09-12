@@ -1,0 +1,4 @@
+# 运行时依赖：全新环境 `pip install -r requirements.txt` 后即可导入并启动 app.main
+fastapi>=0.110
+pydantic>=2.6
+uvicorn[standard]>=0.29

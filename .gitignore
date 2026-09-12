@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 本地 SQLite 与导出物
+data/
+out/
+*.db

@@ -1,0 +1,325 @@
+{
+  "decision": "hold",
+  "stats": {
+    "weld_total": 1,
+    "weld_release": 0,
+    "weld_hold": 1,
+    "lot_total": 1,
+    "lot_hold": 1,
+    "findings_total": 2,
+    "findings_hold": 2,
+    "findings_warning": 0,
+    "repairs_total": 2
+  },
+  "lot_summaries": [
+    {
+      "lot_id": "LOT-B",
+      "required_method": "RT",
+      "required_ratio": 1.0,
+      "total_welds": 1,
+      "required_initial": 1,
+      "examined_initial": 1,
+      "extended": true,
+      "extension_mode": "full",
+      "required_final": 1,
+      "examined_final": 1,
+      "final_ratio": 1.0,
+      "decision": "hold",
+      "findings": [
+        {
+          "code": "LT-OPEN-REJECT",
+          "severity": "hold",
+          "category": "lot",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
+          "weld_no": null,
+          "lot_id": "LOT-B",
+          "nde_id": null,
+          "repair_id": null,
+          "evidence": {
+            "open_reject_welds": [
+              "W-901"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "welds": [
+    {
+      "weld_no": "W-901",
+      "line_no": "PL-100",
+      "lot_id": "LOT-B",
+      "welded_at": "2026-03-01 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-X1",
+        "H-X2"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-X1",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-X2",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 3,
+      "nde": [
+        {
+          "nde_id": "N-900",
+          "method": "RT",
+          "result": "reject",
+          "iteration": 0,
+          "examined_at": "2026-03-02 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-900",
+          "coverage": [
+            {
+              "full_circle": true,
+              "start_deg": 0.0,
+              "end_deg": 360.0
+            }
+          ],
+          "defect_locations": [
+            {
+              "full_circle": false,
+              "start_deg": 200.0,
+              "end_deg": 230.0
+            }
+          ]
+        },
+        {
+          "nde_id": "N-901",
+          "method": "RT",
+          "result": "reject",
+          "iteration": 1,
+          "examined_at": "2026-03-06 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-901",
+          "coverage": [
+            {
+              "full_circle": false,
+              "start_deg": 180.0,
+              "end_deg": 250.0
+            }
+          ],
+          "defect_locations": [
+            {
+              "full_circle": false,
+              "start_deg": 210.0,
+              "end_deg": 218.0
+            }
+          ]
+        },
+        {
+          "nde_id": "N-902",
+          "method": "RT",
+          "result": "accept",
+          "iteration": 2,
+          "examined_at": "2026-03-10 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-902",
+          "coverage": [
+            {
+              "full_circle": false,
+              "start_deg": 200.0,
+              "end_deg": 215.0
+            }
+          ],
+          "defect_locations": []
+        }
+      ],
+      "repairs": [
+        {
+          "iteration": 1,
+          "repair_id": "R-901",
+          "repaired_at": "2026-03-04 10:00:00+00:00",
+          "wps_no": "WPS-101",
+          "welder_id": "W-001",
+          "approved": true,
+          "excavated_band": {
+            "full_circle": false,
+            "start_deg": 195.0,
+            "end_deg": 235.0
+          },
+          "reinspections": [
+            {
+              "nde_id": "N-901",
+              "method": "RT",
+              "result": "reject",
+              "examined_at": "2026-03-06T14:00:00+00:00",
+              "coverage": [
+                {
+                  "full_circle": false,
+                  "start_deg": 180.0,
+                  "end_deg": 250.0
+                }
+              ],
+              "report_no": "RT-2026-N-901"
+            }
+          ],
+          "closed": false
+        },
+        {
+          "iteration": 2,
+          "repair_id": "R-902",
+          "repaired_at": "2026-03-08 10:00:00+00:00",
+          "wps_no": "WPS-101",
+          "welder_id": "W-001",
+          "approved": true,
+          "excavated_band": {
+            "full_circle": false,
+            "start_deg": 205.0,
+            "end_deg": 222.0
+          },
+          "reinspections": [
+            {
+              "nde_id": "N-902",
+              "method": "RT",
+              "result": "accept",
+              "examined_at": "2026-03-10T14:00:00+00:00",
+              "coverage": [
+                {
+                  "full_circle": false,
+                  "start_deg": 200.0,
+                  "end_deg": 215.0
+                }
+              ],
+              "report_no": "RT-2026-N-902"
+            }
+          ],
+          "closed": false
+        }
+      ],
+      "decision": "hold",
+      "findings": [
+        {
+          "code": "LT-OPEN-REJECT",
+          "severity": "hold",
+          "category": "lot",
+          "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+          "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
+          "weld_no": "W-901",
+          "lot_id": "LOT-B",
+          "nde_id": null,
+          "repair_id": null,
+          "evidence": {
+            "open_reject_welds": [
+              "W-901"
+            ]
+          }
+        },
+        {
+          "code": "RP-EXCAVATION-UNCOVERED",
+          "severity": "hold",
+          "category": "repair",
+          "reference": "NB/T 47013：原拍片未必覆盖挖补区，复检范围必须覆盖挖补位置",
+          "message": "复检底片/检测范围未覆盖挖补区域（环向角度区间不覆盖），返修前的旧底片不得作为返修合格依据",
+          "weld_no": "W-901",
+          "lot_id": null,
+          "nde_id": null,
+          "repair_id": "R-902",
+          "evidence": {
+            "iteration": 2,
+            "excavated_band": {
+              "full_circle": false,
+              "start_deg": 205.0,
+              "end_deg": 222.0
+            },
+            "reinspection_coverage": [
+              {
+                "full_circle": false,
+                "start_deg": 200.0,
+                "end_deg": 215.0
+              }
+            ],
+            "old_films_excluded": [
+              {
+                "nde_id": "N-901",
+                "examined_at": "2026-03-06T14:00:00+00:00",
+                "iteration": 1
+              }
+            ],
+            "reason": "复检覆盖范围未包含挖补区；旧底片不得复用"
+          }
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "code": "LT-OPEN-REJECT",
+      "severity": "hold",
+      "category": "lot",
+      "reference": "NB/T 47013 / GB/T 20801：扩检中再次出现不合格且未闭合时整批不得放行",
+      "message": "扩检（加倍/全检）过程中仍有不合格焊口未返修闭合，整批保持 hold",
+      "weld_no": "W-901",
+      "lot_id": "LOT-B",
+      "nde_id": null,
+      "repair_id": null,
+      "evidence": {
+        "open_reject_welds": [
+          "W-901"
+        ]
+      }
+    },
+    {
+      "code": "RP-EXCAVATION-UNCOVERED",
+      "severity": "hold",
+      "category": "repair",
+      "reference": "NB/T 47013：原拍片未必覆盖挖补区，复检范围必须覆盖挖补位置",
+      "message": "复检底片/检测范围未覆盖挖补区域（环向角度区间不覆盖），返修前的旧底片不得作为返修合格依据",
+      "weld_no": "W-901",
+      "lot_id": null,
+      "nde_id": null,
+      "repair_id": "R-902",
+      "evidence": {
+        "iteration": 2,
+        "excavated_band": {
+          "full_circle": false,
+          "start_deg": 205.0,
+          "end_deg": 222.0
+        },
+        "reinspection_coverage": [
+          {
+            "full_circle": false,
+            "start_deg": 200.0,
+            "end_deg": 215.0
+          }
+        ],
+        "old_films_excluded": [
+          {
+            "nde_id": "N-901",
+            "examined_at": "2026-03-06T14:00:00+00:00",
+            "iteration": 1
+          }
+        ],
+        "reason": "复检覆盖范围未包含挖补区；旧底片不得复用"
+      }
+    }
+  ],
+  "clauses_triggered": [
+    "LT-OPEN-REJECT",
+    "RP-EXCAVATION-UNCOVERED"
+  ],
+  "evaluated_at": "2026-09-12 09:20:50.813364+00:00"
+}

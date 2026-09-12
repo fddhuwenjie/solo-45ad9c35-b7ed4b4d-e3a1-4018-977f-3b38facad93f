@@ -80,22 +80,8 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
         [0] + list(ndes_by_iter.keys()) + list(repairs_by_iter.keys())
     )
 
-    # --- 原始（iteration 0）不合格显示必须有一次返修挖补覆盖其位置 ---
+    # 初始（iteration 0）不合格显示的位置汇总；逐次返修时据此核对挖补完整性
     initial_rejects = [r for r in ndes_by_iter.get(0, []) if r.result == "reject"]
-    repair1 = repairs_by_iter.get(1)
-    for rec in initial_rejects:
-        for loc in rec.defect_locations:
-            covered = repair1 is not None and geo.intersects(
-                [repair1.excavated_band], [loc]
-            )
-            if not covered:
-                findings.append(_finding(
-                    "NDE-OPEN-DEFECT",
-                    weld_no=weld.weld_no, nde_id=rec.nde_id,
-                    evidence={"defect": geo.band_dict(loc),
-                              "nde_id": rec.nde_id,
-                              "reason": "缺陷位置无返修挖补记录"},
-                ))
 
     # 有复检底片却没有对应返修记录：序列断裂
     for it in range(1, last_iteration + 1):
@@ -122,21 +108,70 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
                 ))
             continue
 
+        # 本iteration产生的阻塞性条款：任一存在则该次返修不得闭合
+        iter_blocking: list[dict] = []
+
         # 次序与次数
         if it > 1 and (it - 1) not in repairs_by_iter:
-            findings.append(_finding(
+            iter_blocking.append(_finding(
                 "RP-SEQ-GAP", weld_no=weld.weld_no, repair_id=rep.repair_id,
                 evidence={"iteration": it},
             ))
         if it > MAX_REPAIRS:
-            findings.append(_finding(
+            iter_blocking.append(_finding(
                 "RP-LIMIT-EXCEEDED", weld_no=weld.weld_no, repair_id=rep.repair_id,
                 evidence={"iteration": it, "limit": MAX_REPAIRS},
             ))
 
+        # --- 在先缺陷依据与时间次序 ---
+        # 第 1 次返修的在先是初始不合格片；第 n 次返修的在先是第 n-1 轮复检不合格片
+        predecessor_rejects = (
+            initial_rejects if it == 1
+            else [r for r in ndes_by_iter.get(it - 1, []) if r.result == "reject"]
+        )
+        if not predecessor_rejects:
+            iter_blocking.append(_finding(
+                "RP-ORDER-INVALID", weld_no=weld.weld_no, repair_id=rep.repair_id,
+                evidence={"iteration": it,
+                          "reason": "无在先不合格显示即实施返修，返修无缺陷依据"},
+            ))
+        else:
+            # 补焊必须晚于全部在先不合格片（以最晚一张为准）
+            predecessor_deadline = max(r.examined_at for r in predecessor_rejects)
+            if rep.repaired_at <= predecessor_deadline:
+                iter_blocking.append(_finding(
+                    "RP-ORDER-INVALID", weld_no=weld.weld_no,
+                    repair_id=rep.repair_id, nde_id=predecessor_rejects[-1].nde_id,
+                    evidence={"iteration": it,
+                              "repaired_at": rep.repaired_at.isoformat(),
+                              "prior_reject_at": predecessor_deadline.isoformat(),
+                              "reason": "补焊时刻不晚于在先不合格底片，"
+                                        "缺陷发现→补焊次序倒置"},
+                ))
+
+            # 挖补区必须完整覆盖（而非仅相交）在先全部缺陷显示位置
+            predecessor_defects = [
+                loc for rec in predecessor_rejects
+                for loc in rec.defect_locations
+            ]
+            if not geo.covers([rep.excavated_band], predecessor_defects):
+                iter_blocking.append(_finding(
+                    "RP-DEFECT-NOT-EXCAVATED",
+                    weld_no=weld.weld_no, repair_id=rep.repair_id,
+                    evidence={
+                        "iteration": it,
+                        "excavated_band": geo.band_dict(rep.excavated_band),
+                        "prior_defect_locations": [
+                            geo.band_dict(loc) for loc in predecessor_defects
+                        ],
+                        "reason": "挖补区未完整覆盖在先缺陷位置，"
+                                  "仅相交不构成缺陷已清除",
+                    },
+                ))
+
         # 批准
         if not rep.approved or not rep.approved_by:
-            findings.append(_finding(
+            iter_blocking.append(_finding(
                 "RP-NO-APPROVAL", weld_no=weld.weld_no, repair_id=rep.repair_id,
                 evidence={"approved": rep.approved, "approved_by": rep.approved_by},
             ))
@@ -147,14 +182,14 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
             wps, at=rep.repaired_at, groups=groups,
             thicknesses=thicknesses, process=weld.weld_process,
         ):
-            findings.append(_finding(
+            iter_blocking.append(_finding(
                 code, weld_no=weld.weld_no, repair_id=rep.repair_id,
                 evidence={"at": rep.repaired_at.isoformat(), "wps_no": rep.wps_no,
                           "scope": "repair_wps", "iteration": it},
             ))
         if wps is None:
             # 未登记 WPS 用 RP-NO-WPS 再显式挂一条返修条款
-            findings.append(_finding(
+            iter_blocking.append(_finding(
                 "RP-NO-WPS", weld_no=weld.weld_no, repair_id=rep.repair_id,
                 evidence={"wps_no": rep.wps_no},
             ))
@@ -166,21 +201,38 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
             position=weld.weld_position,
         )
         for code in welder_codes:
-            findings.append(_finding(
+            iter_blocking.append(_finding(
                 code, weld_no=weld.weld_no, repair_id=rep.repair_id,
                 evidence={"at": rep.repaired_at.isoformat(),
                           "welder_id": rep.welder_id,
                           "scope": "repair_welder", "iteration": it},
             ))
         if welder is None:
-            findings.append(_finding(
+            iter_blocking.append(_finding(
                 "RP-NO-WELDER", weld_no=weld.weld_no, repair_id=rep.repair_id,
                 evidence={"welder_id": rep.welder_id},
             ))
+        findings.extend(iter_blocking)
+
+        # --- 复检时序：同iteration、同方法的底片若早于/等于补焊，判次序倒置 ---
+        same_iter = ndes_by_iter.get(it, [])
+        for rec in same_iter:
+            same_method = (prev_reject_method is None
+                           or rec.method == prev_reject_method)
+            if same_method and rec.examined_at <= rep.repaired_at:
+                findings.append(_finding(
+                    "RP-ORDER-INVALID", weld_no=weld.weld_no,
+                    repair_id=rep.repair_id, nde_id=rec.nde_id,
+                    evidence={"iteration": it,
+                              "repaired_at": rep.repaired_at.isoformat(),
+                              "reinspected_at": rec.examined_at.isoformat(),
+                              "reason": "复检底片不晚于补焊时刻，"
+                                        "补焊→复检次序倒置，该底片无效"},
+                ))
 
         # --- 复检：必须发生在补焊之后、同方法、覆盖挖补区、结论闭合 ---
         candidates = [
-            r for r in ndes_by_iter.get(it, [])
+            r for r in same_iter
             if r.examined_at > rep.repaired_at
         ]
         method_matched = [r for r in candidates
@@ -206,7 +258,7 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
             old_films: list[dict] = []
             # 返修前拍过的底片即使覆盖挖补区也不得作为复检依据
             for old in ndes_by_iter.get(it - 1, []):
-                if old.iteration == 0 and any(
+                if any(
                     geo.intersects([rep.excavated_band], [c]) for c in old.coverage
                 ):
                     old_films.append({"nde_id": old.nde_id,
@@ -226,7 +278,10 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
                     reject_records.append(rec)
 
             # 覆盖挖补区
-            if not geo.covers(cover_bands, [rep.excavated_band]):
+            excavation_covered = geo.covers(
+                cover_bands, [rep.excavated_band]
+            )
+            if not excavation_covered:
                 findings.append(_finding(
                     "RP-EXCAVATION-UNCOVERED",
                     weld_no=weld.weld_no, repair_id=rep.repair_id,
@@ -244,10 +299,9 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
             # 本轮仍有不合格显示：须由下一次返修沿位置闭合
             next_rep = repairs_by_iter.get(it + 1)
             for rec in reject_records:
+                prev_reject_method = rec.method
                 for loc in rec.defect_locations:
-                    if next_rep is None or not geo.intersects(
-                        [next_rep.excavated_band], [loc]
-                    ):
+                    if next_rep is None:
                         findings.append(_finding(
                             "RP-REINSPECTION-REJECT",
                             weld_no=weld.weld_no, nde_id=rec.nde_id,
@@ -256,11 +310,15 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
                                       "defect": geo.band_dict(loc),
                                       "reason": "复检仍不合格且无后续返修闭合"},
                         ))
-                prev_reject_method = rec.method
 
-            # 本轮合格且覆盖挖补区 => 该次返修闭合
-            if (not reject_records
-                    and geo.covers(cover_bands, [rep.excavated_band])):
+            # 闭合条件（全部满足）：
+            # 1) 本轮复检合格；2) 复检覆盖挖补区；3) 挖补完整覆盖在先缺陷；
+            # 4) 时序有效；5) 批准/资格/次数等本iteration阻塞条款均不存在
+            iteration_blocked = any(
+                f["severity"] == Severity.HOLD.value for f in iter_blocking
+            )
+            if (not reject_records and excavation_covered
+                    and not iteration_blocked):
                 closed = True
 
         links.append({
@@ -275,11 +333,35 @@ def _evaluate_repair_chain(weld: WeldRecord, ndes: list[NdeRecord],
             "closed": closed,
         })
 
-    # 整口闭合：存在初始不合格时，每一次返修都必须 closed；
-    # 初始即全部合格则无返修链，视为闭合。
+    # 初始有不合格显示但整口无任何返修：缺陷保持开口
+    if initial_rejects and not repairs_by_iter:
+        for rec in initial_rejects:
+            for loc in rec.defect_locations:
+                findings.append(_finding(
+                    "NDE-OPEN-DEFECT",
+                    weld_no=weld.weld_no, nde_id=rec.nde_id,
+                    evidence={"defect": geo.band_dict(loc),
+                              "nde_id": rec.nde_id,
+                              "reason": "缺陷位置无返修挖补记录"},
+                ))
+
+    # 整口闭合：存在初始不合格时，每一次返修链节都必须闭合，
+    # 且最后一次返修的挖补必须完整覆盖其在先缺陷（防止早期挖补偏小被后续链节掩盖）。
     chain_closed = True
     if initial_rejects:
-        chain_closed = bool(links) and all(link["closed"] for link in links)
+        chain_closed = bool(links)
+        if chain_closed:
+            last_rep = repairs_by_iter[max(repairs_by_iter)]
+            last_pred = (
+                initial_rejects if last_rep.iteration == 1
+                else [r for r in ndes_by_iter.get(last_rep.iteration - 1, [])
+                      if r.result == "reject"]
+            )
+            last_defects = [loc for rec in last_pred for loc in rec.defect_locations]
+            if not geo.covers([last_rep.excavated_band], last_defects):
+                chain_closed = False
+            else:
+                chain_closed = all(link["closed"] for link in links)
     return findings, links, chain_closed
 
 

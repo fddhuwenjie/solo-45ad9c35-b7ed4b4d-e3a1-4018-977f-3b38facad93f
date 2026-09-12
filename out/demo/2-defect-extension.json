@@ -1,0 +1,557 @@
+{
+  "decision": "release",
+  "stats": {
+    "weld_total": 10,
+    "weld_release": 10,
+    "weld_hold": 0,
+    "lot_total": 1,
+    "lot_hold": 0,
+    "findings_total": 0,
+    "findings_hold": 0,
+    "findings_warning": 0,
+    "repairs_total": 1
+  },
+  "lot_summaries": [
+    {
+      "lot_id": "LOT-A",
+      "required_method": "RT",
+      "required_ratio": 0.2,
+      "total_welds": 10,
+      "required_initial": 2,
+      "examined_initial": 1,
+      "extended": true,
+      "extension_mode": "double",
+      "required_final": 4,
+      "examined_final": 4,
+      "final_ratio": 0.4,
+      "decision": "release",
+      "findings": []
+    }
+  ],
+  "welds": [
+    {
+      "weld_no": "W-001",
+      "line_no": "PL-100",
+      "lot_id": "LOT-A",
+      "welded_at": "2026-03-01 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-A101",
+        "H-B201"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-A101",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-B201",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 2,
+      "nde": [
+        {
+          "nde_id": "N-001",
+          "method": "RT",
+          "result": "reject",
+          "iteration": 0,
+          "examined_at": "2026-03-02 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-001",
+          "coverage": [
+            {
+              "full_circle": true,
+              "start_deg": 0.0,
+              "end_deg": 360.0
+            }
+          ],
+          "defect_locations": [
+            {
+              "full_circle": false,
+              "start_deg": 300.0,
+              "end_deg": 340.0
+            }
+          ]
+        },
+        {
+          "nde_id": "N-051",
+          "method": "RT",
+          "result": "accept",
+          "iteration": 1,
+          "examined_at": "2026-03-06 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-051",
+          "coverage": [
+            {
+              "full_circle": false,
+              "start_deg": 280.0,
+              "end_deg": 355.0
+            }
+          ],
+          "defect_locations": []
+        }
+      ],
+      "repairs": [
+        {
+          "iteration": 1,
+          "repair_id": "R-001",
+          "repaired_at": "2026-03-05 10:00:00+00:00",
+          "wps_no": "WPS-101",
+          "welder_id": "W-001",
+          "approved": true,
+          "excavated_band": {
+            "full_circle": false,
+            "start_deg": 295.0,
+            "end_deg": 345.0
+          },
+          "reinspections": [
+            {
+              "nde_id": "N-051",
+              "method": "RT",
+              "result": "accept",
+              "examined_at": "2026-03-06T14:00:00+00:00",
+              "coverage": [
+                {
+                  "full_circle": false,
+                  "start_deg": 280.0,
+                  "end_deg": 355.0
+                }
+              ],
+              "report_no": "RT-2026-N-051"
+            }
+          ],
+          "closed": true
+        }
+      ],
+      "decision": "release",
+      "findings": []
+    },
+    {
+      "weld_no": "W-002",
+      "line_no": "PL-100",
+      "lot_id": "LOT-A",
+      "welded_at": "2026-03-01 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-A102",
+        "H-B202"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-A102",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-B202",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 1,
+      "nde": [
+        {
+          "nde_id": "N-101",
+          "method": "RT",
+          "result": "accept",
+          "iteration": 0,
+          "examined_at": "2026-03-16 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-101",
+          "coverage": [
+            {
+              "full_circle": true,
+              "start_deg": 0.0,
+              "end_deg": 360.0
+            }
+          ],
+          "defect_locations": []
+        }
+      ],
+      "repairs": [],
+      "decision": "release",
+      "findings": []
+    },
+    {
+      "weld_no": "W-003",
+      "line_no": "PL-100",
+      "lot_id": "LOT-A",
+      "welded_at": "2026-03-01 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-A103",
+        "H-B203"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-A103",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-B203",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 0,
+      "nde": [],
+      "repairs": [],
+      "decision": "release",
+      "findings": []
+    },
+    {
+      "weld_no": "W-004",
+      "line_no": "PL-100",
+      "lot_id": "LOT-A",
+      "welded_at": "2026-03-02 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-A104",
+        "H-B204"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-A104",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-B204",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 0,
+      "nde": [],
+      "repairs": [],
+      "decision": "release",
+      "findings": []
+    },
+    {
+      "weld_no": "W-005",
+      "line_no": "PL-100",
+      "lot_id": "LOT-A",
+      "welded_at": "2026-03-02 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-A105",
+        "H-B205"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-A105",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-B205",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 0,
+      "nde": [],
+      "repairs": [],
+      "decision": "release",
+      "findings": []
+    },
+    {
+      "weld_no": "W-006",
+      "line_no": "PL-100",
+      "lot_id": "LOT-A",
+      "welded_at": "2026-03-02 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-A106",
+        "H-B206"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-A106",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-B206",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 1,
+      "nde": [
+        {
+          "nde_id": "N-002",
+          "method": "RT",
+          "result": "accept",
+          "iteration": 0,
+          "examined_at": "2026-03-08 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-002",
+          "coverage": [
+            {
+              "full_circle": true,
+              "start_deg": 0.0,
+              "end_deg": 360.0
+            }
+          ],
+          "defect_locations": []
+        }
+      ],
+      "repairs": [],
+      "decision": "release",
+      "findings": []
+    },
+    {
+      "weld_no": "W-007",
+      "line_no": "PL-100",
+      "lot_id": "LOT-A",
+      "welded_at": "2026-03-02 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-A107",
+        "H-B207"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-A107",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-B207",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 1,
+      "nde": [
+        {
+          "nde_id": "N-102",
+          "method": "RT",
+          "result": "accept",
+          "iteration": 0,
+          "examined_at": "2026-03-17 14:00:00+00:00",
+          "examiner": "NDE-II-张",
+          "lot_id": null,
+          "report_no": "RT-2026-N-102",
+          "coverage": [
+            {
+              "full_circle": true,
+              "start_deg": 0.0,
+              "end_deg": 360.0
+            }
+          ],
+          "defect_locations": []
+        }
+      ],
+      "repairs": [],
+      "decision": "release",
+      "findings": []
+    },
+    {
+      "weld_no": "W-008",
+      "line_no": "PL-100",
+      "lot_id": "LOT-A",
+      "welded_at": "2026-03-03 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-A108",
+        "H-B208"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-A108",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-B208",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 0,
+      "nde": [],
+      "repairs": [],
+      "decision": "release",
+      "findings": []
+    },
+    {
+      "weld_no": "W-009",
+      "line_no": "PL-100",
+      "lot_id": "LOT-A",
+      "welded_at": "2026-03-03 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-A109",
+        "H-B209"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-A109",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-B209",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 0,
+      "nde": [],
+      "repairs": [],
+      "decision": "release",
+      "findings": []
+    },
+    {
+      "weld_no": "W-010",
+      "line_no": "PL-100",
+      "lot_id": "LOT-A",
+      "welded_at": "2026-03-03 09:00:00+00:00",
+      "material_groups": [
+        "Fe-1",
+        "Fe-1"
+      ],
+      "heat_nos": [
+        "H-A110",
+        "H-B210"
+      ],
+      "heats": [
+        {
+          "side": "a",
+          "heat_no": "H-A110",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        },
+        {
+          "side": "b",
+          "heat_no": "H-B210",
+          "material_group": "Fe-1",
+          "nominal_diameter_mm": 114.3,
+          "thickness_mm": 8.18
+        }
+      ],
+      "thickness_mm": [
+        8.18,
+        8.18
+      ],
+      "nde_count": 0,
+      "nde": [],
+      "repairs": [],
+      "decision": "release",
+      "findings": []
+    }
+  ],
+  "findings": [],
+  "clauses_triggered": [],
+  "evaluated_at": "2026-09-12 09:20:50.796994+00:00"
+}

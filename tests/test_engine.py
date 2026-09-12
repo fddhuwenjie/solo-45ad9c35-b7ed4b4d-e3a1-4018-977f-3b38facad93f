@@ -289,3 +289,109 @@ def test_ndes_none_in_full_ratio_lot():
     p.lot_rules[0].sample_ratio = 1.0
     c = weld_codes(p, "W-901")
     assert "NDE-NONE" in c
+
+
+# ---------------------------------------------------------------- 缺陷覆盖与时序回归
+
+
+def _single_repair_payload_dict():
+    """以二次返修样例为底，裁成 原始不合格->一次返修->一次复检 的 dict。"""
+    data = double_repair_payload().model_dump(mode="json")
+    data["repairs"] = [r for r in data["repairs"] if r["iteration"] == 1]
+    data["nde"] = [r for r in data["nde"] if r["iteration"] in (0, 1)]
+    n0, n1 = data["nde"]
+    assert n0["iteration"] == 0 and n1["iteration"] == 1
+    return data, n0, n1, data["repairs"][0]
+
+
+def test_excavation_must_fully_cover_defect_partial_overlap():
+    """缺陷 100~140，挖补仅 100~101（仅相交）：不得闭合、整口 hold。"""
+    data, n0, n1, rep = _single_repair_payload_dict()
+    n0["defect_locations"] = [
+        {"start_deg": 100, "end_deg": 140, "full_circle": False}]
+    rep["excavated_band"] = {"start_deg": 100, "end_deg": 101,
+                             "full_circle": False}
+    n1["result"] = "accept"
+    n1["defect_locations"] = []
+    n1["coverage"] = [{"start_deg": 100, "end_deg": 101,
+                       "full_circle": False}]
+    p = SubmissionPayload.model_validate(data)
+    r = evaluate(p)
+    v = next(w for w in r["welds"] if w["weld_no"] == "W-901")
+    c = {f["code"] for f in v["findings"]}
+    assert "RP-DEFECT-NOT-EXCAVATED" in c
+    assert v["repairs"][0]["closed"] is False
+    assert v["decision"] == "hold"
+    assert r["decision"] == "hold"
+
+
+def test_excavation_covering_defect_and_reinspection_releases():
+    """正向对照：挖补包住缺陷、复检包住挖补 => 闭合放行。"""
+    data, n0, n1, rep = _single_repair_payload_dict()
+    n0["defect_locations"] = [
+        {"start_deg": 100, "end_deg": 140, "full_circle": False}]
+    rep["excavated_band"] = {"start_deg": 95, "end_deg": 145,
+                             "full_circle": False}
+    n1["result"] = "accept"
+    n1["defect_locations"] = []
+    n1["coverage"] = [{"start_deg": 90, "end_deg": 150,
+                       "full_circle": False}]
+    p = SubmissionPayload.model_validate(data)
+    v = next(w for w in evaluate(p)["welds"] if w["weld_no"] == "W-901")
+    assert {f["code"] for f in v["findings"]} == set()
+    assert v["repairs"][0]["closed"] is True
+    assert v["decision"] == "release"
+
+
+def test_repair_earlier_than_reject_film_is_order_invalid():
+    """补焊时刻早于在先不合格底片：RP-ORDER-INVALID，链不闭合。"""
+    data, n0, n1, rep = _single_repair_payload_dict()
+    n0["examined_at"] = "2026-03-06T14:00:00Z"
+    rep["repaired_at"] = "2026-03-04T10:00:00Z"
+    n1["examined_at"] = "2026-03-08T14:00:00Z"
+    n1["result"] = "accept"
+    n1["defect_locations"] = []
+    n1["coverage"] = [b for b in [
+        {"start_deg": 180, "end_deg": 250, "full_circle": False}]]
+    p = SubmissionPayload.model_validate(data)
+    r = evaluate(p)
+    v = next(w for w in r["welds"] if w["weld_no"] == "W-901")
+    c = {f["code"] for f in v["findings"]}
+    assert "RP-ORDER-INVALID" in c
+    assert v["repairs"][0]["closed"] is False
+    assert v["decision"] == "hold"
+
+
+def test_reinspection_earlier_than_repair_is_order_invalid():
+    """复检底片早于补焊：判次序倒置且该底片不得充当复检 => hold。"""
+    data, n0, n1, rep = _single_repair_payload_dict()
+    n0["examined_at"] = "2026-03-02T14:00:00Z"
+    rep["repaired_at"] = "2026-03-06T10:00:00Z"
+    n1["examined_at"] = "2026-03-04T14:00:00Z"  # 早于补焊
+    n1["result"] = "accept"
+    n1["defect_locations"] = []
+    n1["coverage"] = [{"start_deg": 180, "end_deg": 250,
+                       "full_circle": False}]
+    p = SubmissionPayload.model_validate(data)
+    v = next(w for w in evaluate(p)["welds"] if w["weld_no"] == "W-901")
+    c = {f["code"] for f in v["findings"]}
+    assert "RP-ORDER-INVALID" in c
+    assert "RP-NO-REINSPECTION" in c  # 倒置底片被排除后无有效复检
+    assert v["repairs"][0]["closed"] is False
+    assert v["decision"] == "hold"
+
+
+def test_equal_timestamp_is_not_valid_order():
+    """补焊与不合格底片同一时刻也不满足严格先后（必须先发现后补焊）。"""
+    data, n0, n1, rep = _single_repair_payload_dict()
+    n0["examined_at"] = "2026-03-04T10:00:00Z"
+    rep["repaired_at"] = "2026-03-04T10:00:00Z"
+    n1["examined_at"] = "2026-03-06T14:00:00Z"
+    n1["result"] = "accept"
+    n1["defect_locations"] = []
+    n1["coverage"] = [{"start_deg": 180, "end_deg": 250,
+                       "full_circle": False}]
+    p = SubmissionPayload.model_validate(data)
+    v = next(w for w in evaluate(p)["welds"] if w["weld_no"] == "W-901")
+    assert "RP-ORDER-INVALID" in {f["code"] for f in v["findings"]}
+    assert v["repairs"][0]["closed"] is False

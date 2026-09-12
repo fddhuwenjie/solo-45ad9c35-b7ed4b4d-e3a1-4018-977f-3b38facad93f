@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weld-release-api"
+version = "1.0.0"
+description = "承压管道焊口合规放行 REST API（FastAPI + Pydantic + SQLite）"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "pydantic>=2.6",
+    "uvicorn[standard]>=0.29",
+]
+
+[project.optional-dependencies]
+dev = ["httpx>=0.27", "pytest>=8.0"]
+
+[tool.setuptools]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

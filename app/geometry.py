@@ -62,11 +62,21 @@ def intersects(a: list[AngleBand], b: list[AngleBand], step_deg: float = 0.25) -
 
 
 def band_dict(band: AngleBand) -> dict:
-    """角度区间的 JSON 表示。"""
+    """角度区间的 JSON 表示。
+
+    标记全周或语义上恰好一圈（如 0~360）的区间统一输出 full_circle，
+    避免两端分别归一化后坍缩成 (0,0) 而丢失覆盖信息。
+    """
     if band.full_circle:
+        return {"full_circle": True, "start_deg": 0.0, "end_deg": 360.0}
+    start = norm(band.start_deg)
+    end = norm(band.end_deg)
+    raw_span = (band.end_deg - band.start_deg) % FULL
+    if start == end and raw_span == 0.0 and band.end_deg != band.start_deg:
+        # 跨度恰为整圈（0~360、360~720 等）
         return {"full_circle": True, "start_deg": 0.0, "end_deg": 360.0}
     return {
         "full_circle": False,
-        "start_deg": norm(band.start_deg),
-        "end_deg": norm(band.end_deg),
+        "start_deg": start,
+        "end_deg": end,
     }

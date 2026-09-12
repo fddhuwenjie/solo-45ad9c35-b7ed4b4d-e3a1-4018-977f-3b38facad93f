@@ -181,6 +181,20 @@ CLAUSES: dict[str, dict[str, str]] = {
         "message": "复检底片/检测范围未覆盖挖补区域（环向角度区间不覆盖），"
                    "返修前的旧底片不得作为返修合格依据",
     },
+    "RP-DEFECT-NOT-EXCAVATED": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.REPAIR.value,
+        "reference": "GB/T 20801 / NB/T 47013：挖补范围必须完整去除在先检测显示的缺陷",
+        "message": "挖补区未完整覆盖在先不合格显示位置：仅相交不等于缺陷已清除，"
+                   "残留缺陷不得判闭合（如缺陷 100°~140°，挖补仅 100°~101°）",
+    },
+    "RP-ORDER-INVALID": {
+        "severity": Severity.HOLD.value,
+        "category": ClauseCategory.REPAIR.value,
+        "reference": "质量记录可追溯：缺陷发现 → 挖补补焊 → 复检的先后次序必须成立",
+        "message": "返修时序倒置或缺少在先不合格依据"
+                   "（补焊早于不合格底片、复检早于补焊，或无缺陷显示即返修）",
+    },
 }
 
 
