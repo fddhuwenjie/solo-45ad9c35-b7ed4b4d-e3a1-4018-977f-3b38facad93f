@@ -187,6 +187,16 @@ def _completeness(*, payload: SubmissionPayload, batches, rules, containers,
         add("stays_empty", "未登记任何保温暂存")
     if not payload.consumable_segments:
         add("segments_empty", "未登记任何领用段")
+    if payload.consumable_segments and not payload.consumable_events:
+        add("events_empty", "已登记领用段但无任何退回/报废事件，领用段无法闭合")
+    # 逐段：存在领用段却没有任何退回/报废事件（与 WM-QTY-OPEN 同源，
+    # 但属于记录链缺项，须同步阻止冻结）
+    seg_with_event = {e.segment_id for e in payload.consumable_events}
+    for seg in payload.consumable_segments:
+        if seg.segment_id not in seg_with_event:
+            add("segment_events_missing",
+                f"领用段 {seg.segment_id} 无退回/报废事件，领用数量未闭合",
+                segment_id=seg.segment_id)
 
     # 引用缺失（不依赖规则判定）
     for b in payload.consumable_batches:
@@ -268,9 +278,23 @@ def _completeness(*, payload: SubmissionPayload, batches, rules, containers,
 
 
 def verify_consumables(payload: SubmissionPayload) -> dict:
-    """核验整包焊材链。未登记任何焊材批次时返回 enabled=False（链不启用）。"""
+    """核验整包焊材链。
+
+    启用判定：只要焊材链任一组成（批次/制度/设备/烘干/保温/领用段/退回报废
+    事件，或焊口/返修上的逐耗）非空即视为本包启用焊材链。批次为空时**不再**
+    当作"链未启用"放行，而是判结构完整性失败（相关焊口 hold、禁止冻结签发）。
+    只有整个材料链连同逐耗完全缺省（旧载荷）才返回 enabled=False。
+    """
     batches = {b.batch_id: b for b in payload.consumable_batches}
-    if not batches:
+    chain_present = bool(
+        payload.consumable_batches or payload.consumable_rules
+        or payload.consumable_containers or payload.bake_cycles
+        or payload.quiver_stays or payload.consumable_segments
+        or payload.consumable_events
+        or any(w.consumables for w in payload.welds)
+        or any(r.consumables for r in payload.repairs)
+    )
+    if not chain_present:
         return {"enabled": False, "use_states": {}, "failures": []}
 
     rules = {r.classification: r for r in payload.consumable_rules}

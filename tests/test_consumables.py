@@ -140,19 +140,91 @@ def test_empty_rules_containers_bakes_segments_keep_hold_and_block_freeze():
     assert all(w["decision"] == "hold" for w in r["welds"])
 
 
-def test_no_batch_at_all_blocks_freeze():
-    """完全没有批次（链未启用）时不阻断；批次存在但为空集以外的缺项才阻断。
+def test_batches_empty_is_completeness_failure_not_chain_disabled(tmp_path,
+                                                                  monkeypatch):
+    """仅批次为空：不得被当作"链未启用"放行。
 
-    此处批次登记 1 条但无任何设备/事件：仍属于启用链但结构缺失。
+    链仍启用、判为结构完整性失败，十道焊口全部 hold，审查包不得冻结/签发。
     """
     payload = direct_release_payload().model_copy(deep=True)
+    payload.consumable_batches = []  # 制度/设备/事件/逐耗仍在
+    r = evaluate(payload)
+    cons = r["consumables"]
+    assert cons["enabled"] is True
+    assert cons["freeze_blocked"] is True
+    kinds = {g["kind"] for g in cons["completeness"]["gaps"]}
+    assert "batches_empty" in kinds
+    # 每道焊口都挂账但批次无法解析 -> 全部 hold
+    assert [w["weld_no"] for w in r["welds"]
+            if w["decision"] == "release"] == []
+    assert all(w["decision"] == "hold" for w in r["welds"])
+    assert r["decision"] == "hold"
+
+    db = tmp_path / "nobatch.db"
+    monkeypatch.setenv("WELD_DB_PATH", str(db))
+    import app.main as main
+    importlib.reload(main)
+    main.store = main.Store(str(db))
+    with TestClient(main.app) as client:
+        pid = client.post(
+            "/packages", json=payload.model_dump(mode="json")
+        ).json()["package_id"]
+        rv = client.post(f"/packages/{pid}/review",
+                         json={"reviewer": "李"})
+        assert rv.status_code == 409
+        assert client.post(f"/packages/{pid}/issue",
+                           json={"issuer": "赵"}).status_code == 409
+
+
+def test_events_empty_blocks_freeze_despite_wm_qty_open(tmp_path, monkeypatch):
+    """仅退回/报废事件为空：焊口已因 WM-QTY-OPEN hold，且必须同步阻止冻结。"""
+    payload = direct_release_payload().model_copy(deep=True)
+    payload.consumable_events = []  # 批次/制度/设备/段/逐耗齐全
+    r = evaluate(payload)
+    cons = r["consumables"]
+    assert cons["enabled"] is True
+    assert "WM-QTY-OPEN" in r["clauses_triggered"]
+    assert cons["freeze_blocked"] is True
+    kinds = {g["kind"] for g in cons["completeness"]["gaps"]}
+    assert "events_empty" in kinds
+    assert "segment_events_missing" in kinds
+    # 每个领用段都逐段标记缺事件
+    seg_gaps = {g.get("segment_id")
+                for g in cons["completeness"]["gaps"]
+                if g["kind"] == "segment_events_missing"}
+    assert seg_gaps == {s.segment_id for s in payload.consumable_segments}
+
+    db = tmp_path / "noevents.db"
+    monkeypatch.setenv("WELD_DB_PATH", str(db))
+    import app.main as main
+    importlib.reload(main)
+    main.store = main.Store(str(db))
+    with TestClient(main.app) as client:
+        pid = client.post(
+            "/packages", json=payload.model_dump(mode="json")
+        ).json()["package_id"]
+        rv = client.post(f"/packages/{pid}/review",
+                         json={"reviewer": "李"})
+        assert rv.status_code == 409
+        assert client.post(f"/packages/{pid}/issue",
+                           json={"issuer": "赵"}).status_code == 409
+
+
+def test_chain_fully_absent_stays_disabled_and_releases():
+    """旧载荷完全无焊材链（批次与逐耗皆空）：链不启用，按原逻辑放行。"""
+    payload = direct_release_payload().model_copy(deep=True)
+    payload.consumable_batches = []
+    payload.consumable_rules = []
     payload.consumable_containers = []
     payload.bake_cycles = []
     payload.quiver_stays = []
     payload.consumable_segments = []
+    payload.consumable_events = []
+    for w in payload.welds:
+        w.consumables = []
     r = evaluate(payload)
-    assert r["consumables"]["enabled"] is True
-    assert r["consumables"]["freeze_blocked"] is True
+    assert r["consumables"]["enabled"] is False
+    assert r["decision"] == "release"
 
 
 # ---------------------------------------------------------------- 数量守恒归属

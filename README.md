@@ -201,10 +201,13 @@ curl -s "localhost:8000/packages/$PID/welds/W-001/svg?version=1" -o w001.svg
   **段级数量条款只归属实际 `segment_id`，SG-01 超配不会错指 SG-03 或连带无关焊口**；
 - **返修闭合**：返修补焊消耗未通过焊材链核验即 `RP-WM-INVALID`，该次返修不得
   闭合（随附具体 WM 码）；
-- **结构缺口**：批次/制度/设备/烘干/保温/领用段为空，或焊口/返修无逐耗、引用
-  无法解析时，`consumables.freeze_blocked=true`，`POST /review` 返回 409，
-  审查包不得冻结或签发；补录后重新提交。规则性 hold（记录齐全但超时/温度越限/
-  数量重复分配）可冻结供从旧版开修订分支；
+- **结构缺口**：批次为空，或制度/设备/烘干/保温/领用段为空，或存在领用段却无
+  任何退回/报废事件、焊口/返修无逐耗、引用无法解析时，
+  `consumables.freeze_blocked=true`，`POST /review` 返回 409，
+  审查包不得冻结或签发；补录后重新提交。**注意**：批次为空不再被当作"链未
+  启用"放行——只要链中任一组成（含焊口/返修上的逐耗）非空即启用链，批次缺失
+  即完整性失败；规则性 hold（记录齐全但超时/温度越限/数量重复分配）可冻结供
+  从旧版开修订分支；
 - 复核冻结时每耗内嵌事件链摘要（批次/制度/烘干/保温/领用段/退回报废事件），
   `/diff` 的 `consumable_evaluation` 块对比两版：`old_codes`/`new_codes`、
   `resolved`/`introduced`、`old_invalid_uses`/`new_invalid_uses` 逐笔给出
